@@ -1,0 +1,24 @@
+[2025-11-17 16:04:03.386] [INFO] [Logger-Thread] Logger initialized
+[2025-11-17 16:04:03.388] [INFO] [Logger-Thread] Logger configured from Config: level=INFO
+[2025-11-17 16:04:03.388] [INFO] [Logger-Thread] Starting Valve Manufacturing Simulation...
+[2025-11-17 16:04:03.807] [INFO] [Logger-Thread] FlatLaf Dark theme loaded
+[2025-11-17 16:04:03.921] [INFO] [Logger-Thread] Shift calendar initialized: 6-22 hours, 5 working days
+[2025-11-17 16:04:05.472] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-17 16:05:05.958] [INFO] [Logger-Thread] Logger initialized
+[2025-11-17 16:05:05.958] [INFO] [Logger-Thread] Logger configured from Config: level=INFO
+[2025-11-17 16:05:05.958] [INFO] [Logger-Thread] Starting Valve Manufacturing Simulation...
+[2025-11-17 16:05:06.265] [INFO] [Logger-Thread] FlatLaf Dark theme loaded
+[2025-11-17 16:05:06.328] [INFO] [Logger-Thread] Initializing main frame...
+[2025-11-17 16:05:06.344] [INFO] [Logger-Thread] Shift calendar initialized: 6-22 hours, 5 working days
+[2025-11-17 16:05:06.742] [INFO] [Logger-Thread] Main frame initialized successfully
+[2025-11-17 16:05:07.130] [INFO] [Logger-Thread] Main frame displayed
+[2025-11-17 16:44:53.849] [INFO] [Logger-Thread] Logger initialized
+[2025-11-17 16:44:53.849] [INFO] [Logger-Thread] Logger configured from Config: level=INFO
+[2025-11-17 16:44:53.849] [INFO] [Logger-Thread] Starting Valve Manufacturing Simulation...
+[2025-11-17 16:44:54.176] [INFO] [Logger-Thread] FlatLaf Dark theme loaded
+[2025-11-17 16:44:54.259] [INFO] [Logger-Thread] Initializing main frame...
+[2025-11-17 16:44:54.278] [INFO] [Logger-Thread] Shift calendar initialized: 6-22 hours, 5 working days
+[2025-11-17 16:44:54.362] [INFO] [Logger-Thread] Control panel initialized
+[2025-11-17 16:44:54.755] [INFO] [Logger-Thread] Main frame initialized successfully
+[2025-11-17 16:44:55.069] [INFO] [Logger-Thread] Main frame displayed
+[2025-11-17 16:44:57.586] [INFO] [Logger-Thread] Simulation started
