@@ -64,6 +64,11 @@ public class SimulationEngine {
         int m1Units = Math.max(1, config.getMachineUnits("m1"));
         int m2Units = Math.max(1, config.getMachineUnits("m2"));
         int m3Units = Math.max(1, config.getMachineUnits("m3"));
+        
+        // Leer capacidades de almacenes desde config
+        int almacenM1Cap = config.getInt("location.almacen_m1.capacity", 20);
+        int almacenM2Cap = config.getInt("location.almacen_m2.capacity", 20);
+        int almacenM3Cap = config.getInt("location.almacen_m3.capacity", 30);
 
         // Create locations with exact ProModel specifications
         locations.put("DOCK", new Location("DOCK", Integer.MAX_VALUE, 1,
@@ -71,7 +76,7 @@ public class SimulationEngine {
         locations.put("STOCK", new Location("STOCK", Integer.MAX_VALUE, 1,
             new Point(200, 420)));
 
-        locations.put("Almacen_M1", new Location("Almacen_M1", 20, 1,
+        locations.put("Almacen_M1", new Location("Almacen_M1", almacenM1Cap, 1,
             new Point(560, 520)));
         // M1 parent - SOLO para enrutamiento, no procesa válvulas
         // Capacidad 0 para que las válvulas vayan directo a M1.x
@@ -84,7 +89,7 @@ public class SimulationEngine {
             pathNetwork.registerLocationNode("M1." + i, pathNetwork.getNodeForLocation("M1"));
         }
 
-        locations.put("Almacen_M2", new Location("Almacen_M2", 20, 1,
+        locations.put("Almacen_M2", new Location("Almacen_M2", almacenM2Cap, 1,
             new Point(960, 320)));
         // M2 parent - SOLO para enrutamiento
         locations.put("M2", new Location("M2", 0, m2Units,
@@ -95,7 +100,7 @@ public class SimulationEngine {
             pathNetwork.registerLocationNode("M2." + i, pathNetwork.getNodeForLocation("M2"));
         }
 
-        locations.put("Almacen_M3", new Location("Almacen_M3", 30, 1,
+        locations.put("Almacen_M3", new Location("Almacen_M3", almacenM3Cap, 1,
             new Point(1080, 180)));
         // M3 parent - SOLO para enrutamiento
         locations.put("M3", new Location("M3", 0, m3Units,
@@ -644,7 +649,8 @@ public class SimulationEngine {
                 continue;
             }
 
-            boolean shiftDependent = isMachineUnit(name);
+            // Almacenes y unidades individuales dependen de turno
+            boolean shiftDependent = isMachineUnit(name) || isAlmacen(name);
             boolean countTowardsSchedule = shiftDependent ? workingHour : true;
 
             loc.updateStatistics(sampleTime, countTowardsSchedule);
@@ -674,9 +680,12 @@ public class SimulationEngine {
         return name.startsWith("M1.") || name.startsWith("M2.") || name.startsWith("M3.");
     }
 
+    private boolean isAlmacen(String name) {
+        return name.startsWith("Almacen_");
+    }
+
     private void updateMachineAggregate(String machineBaseName, double sampleTime) {
         double busySum = 0.0;
-        double observedSum = 0.0;
         int totalContents = 0;
         int actualUnits = 0;
 
@@ -689,25 +698,18 @@ public class SimulationEngine {
 
             Location unit = entry.getValue();
             busySum += unit.getTotalBusyTime();
-            observedSum += unit.getTotalObservedTime();
             totalContents += unit.getCurrentContents();
             actualUnits++;
         }
 
+        // Normalizar con stats_units (factor de ajuste)
         Config config = Config.getInstance();
         double statsUnits = config.getMachineStatsUnits(machineBaseName, actualUnits > 0 ? actualUnits : 1);
         double scheduledPerUnit = shiftCalendar.getTotalWorkingHoursPerWeek();
         double weeksSimulated = Math.max(sampleTime, SAMPLE_EPSILON) / 168.0;
         double totalScheduled = statsUnits * scheduledPerUnit * weeksSimulated;
 
-        double utilization;
-        if (totalScheduled > 0.0) {
-            utilization = (busySum / totalScheduled) * 100.0;
-        } else if (observedSum > 0.0) {
-            utilization = (busySum / observedSum) * 100.0;
-        } else {
-            utilization = 0.0;
-        }
+        double utilization = (totalScheduled > 0.0) ? (busySum / totalScheduled) * 100.0 : 0.0;
 
         statistics.updateLocationStats(machineBaseName, totalContents, utilization, sampleTime);
     }

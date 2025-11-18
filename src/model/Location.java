@@ -105,11 +105,19 @@ public class Location {
     }
 
     public double getUtilization() {
+        // Para almacenes (nombre empieza con "Almacen_"), usar contenido vs capacidad
+        if (name.startsWith("Almacen_") && capacity > 0 && capacity < Integer.MAX_VALUE) {
+            return (getAverageContents() / capacity) * 100.0;
+        }
+        
+        // Para máquinas, usar tiempo ocupado vs tiempo observado
         double denominator = totalObservedTime * units;
         if (denominator <= 0) {
             return 0;
         }
-        return (totalBusyTime / denominator) * 100.0;
+        double util = (totalBusyTime / denominator) * 100.0;
+        // Cap at 100% for individual units
+        return Math.min(util, 100.0);
     }
 
     public synchronized double getTotalBusyTime() {

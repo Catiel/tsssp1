@@ -107,7 +107,52 @@ public class Statistics {
         sb.append("\n┌─────────────────────────────────────────────────────────┐\n");
         sb.append("│  ESTADISTICAS DE UBICACIONES                              │\n");
         sb.append("├─────────────────────────────────────────────────────────┤\n");
-        for (LocationStats stats : locationStats.values()) {
+        
+        // Ordenar: Agregados (M1, M2, M3), luego Almacenes, luego otros
+        List<LocationStats> sortedStats = new ArrayList<>(locationStats.values());
+        sortedStats.sort((a, b) -> {
+            String nameA = a.getName();
+            String nameB = b.getName();
+            
+            // Ocultar unidades individuales (M1.1, M2.3, etc.)
+            boolean aIsUnit = nameA.matches("M[123]\\.\\d+");
+            boolean bIsUnit = nameB.matches("M[123]\\.\\d+");
+            if (aIsUnit || bIsUnit) {
+                if (aIsUnit && bIsUnit) return 0;
+                return aIsUnit ? 1 : -1; // Units al final
+            }
+            
+            // Prioridad 1: Agregados M1, M2, M3
+            boolean aIsAggregate = nameA.matches("M[123]");
+            boolean bIsAggregate = nameB.matches("M[123]");
+            if (aIsAggregate != bIsAggregate) {
+                return aIsAggregate ? -1 : 1;
+            }
+            if (aIsAggregate) {
+                return nameA.compareTo(nameB);
+            }
+            
+            // Prioridad 2: Almacenes
+            boolean aIsAlmacen = nameA.startsWith("Almacen_");
+            boolean bIsAlmacen = nameB.startsWith("Almacen_");
+            if (aIsAlmacen != bIsAlmacen) {
+                return aIsAlmacen ? -1 : 1;
+            }
+            if (aIsAlmacen) {
+                return nameA.compareTo(nameB);
+            }
+            
+            // Resto alfabético
+            return nameA.compareTo(nameB);
+        });
+        
+        // Imprimir solo agregados, almacenes y ubicaciones principales
+        for (LocationStats stats : sortedStats) {
+            String name = stats.getName();
+            // Saltar unidades individuales
+            if (name.matches("M[123]\\.\\d+")) {
+                continue;
+            }
             sb.append(stats.getReport()).append("\n");
         }
 

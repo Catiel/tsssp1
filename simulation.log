@@ -5150,3 +5150,59 @@ java.util.ConcurrentModificationException
 	at java.desktop/java.awt.EventDispatchThread.pumpEvents(EventDispatchThread.java:101)
 	at java.desktop/java.awt.EventDispatchThread.run(EventDispatchThread.java:90)
 [2025-11-18 12:21:14.139] [INFO] [Logger-Thread] Simulation completed successfully
+[2025-11-18 16:23:50.825] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:23:50.825] [INFO] [Logger-Thread] Logger configured from Config: level=INFO
+[2025-11-18 16:23:50.825] [INFO] [Logger-Thread] Starting Valve Manufacturing Simulation...
+[2025-11-18 16:23:51.182] [INFO] [Logger-Thread] FlatLaf Dark theme loaded
+[2025-11-18 16:23:51.262] [INFO] [Logger-Thread] Initializing main frame...
+[2025-11-18 16:23:51.278] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:23:51.439] [INFO] [Logger-Thread] Control panel initialized
+[2025-11-18 16:23:51.655] [INFO] [Logger-Thread] Main frame initialized successfully
+[2025-11-18 16:23:51.960] [INFO] [Logger-Thread] Main frame displayed
+[2025-11-18 16:23:53.574] [INFO] [Logger-Thread] Simulation started
+[2025-11-18 16:25:21.301] [INFO] [Logger-Thread] Simulation completed successfully
+[2025-11-18 16:31:39.076] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 16:32:40.937] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:32:40.946] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:32:41.294] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:32:41.337] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 16:33:08.452] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:33:08.472] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:33:09.237] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:33:09.339] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 16:33:29.702] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:33:29.712] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:33:30.289] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:33:30.404] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 16:33:39.725] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:33:39.732] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:33:40.187] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:33:40.273] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 16:35:42.264] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:35:42.282] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:35:43.134] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:35:43.272] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 16:36:18.524] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:36:18.536] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:36:19.030] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:36:19.094] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 16:36:48.220] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:36:48.233] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:36:48.742] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:36:48.809] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 16:37:12.139] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:37:12.152] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:37:12.673] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:37:12.746] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 16:37:30.811] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:37:30.822] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:37:31.630] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:37:31.772] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 16:37:50.053] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:37:50.066] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:37:50.871] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:37:50.970] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 16:38:01.756] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:38:01.768] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:38:02.217] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:38:02.294] [INFO] [Logger-Thread] Logger shutting down...
