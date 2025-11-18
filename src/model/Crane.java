@@ -92,7 +92,7 @@ public class Crane {
         this.isMoving = true;
     }
 
-    public void updateVisualPosition(double deltaSeconds) {
+    public synchronized void updateVisualPosition(double deltaSeconds) {
         if (!isMoving || currentPathPoints.size() < 2) {
             return;
         }
