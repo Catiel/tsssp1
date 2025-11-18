@@ -154,7 +154,7 @@ public class Crane {
         return valve;
     }
 
-    public void completeTrip() {
+    public synchronized void completeTrip() {
         totalTrips++;
         visualProgress = 1.0;
         isMoving = false;
@@ -195,5 +195,9 @@ public class Crane {
     public double getFullSpeed() { return fullSpeed; }
     public List<Double> getUtilizationHistory() { return new ArrayList<>(utilizationHistory); }
     public List<Double> getTimeHistory() { return new ArrayList<>(timeHistory); }
-    public List<Point> getCurrentPathPoints() { return new ArrayList<>(currentPathPoints); }
+    public List<Point> getCurrentPathPoints() { 
+        synchronized(this) {
+            return new ArrayList<>(currentPathPoints); 
+        }
+    }
 }

@@ -22,16 +22,19 @@ public class LocationStats {
         timeHistory.add(time);
     }
 
-    public double getAverageContents() {
-        return contentHistory.stream().mapToInt(Integer::intValue).average().orElse(0);
+    public synchronized double getAverageContents() {
+        List<Integer> snapshot = new ArrayList<>(contentHistory);
+        return snapshot.stream().mapToInt(Integer::intValue).average().orElse(0);
     }
 
-    public double getMaxContents() {
-        return contentHistory.stream().mapToInt(Integer::intValue).max().orElse(0);
+    public synchronized double getMaxContents() {
+        List<Integer> snapshot = new ArrayList<>(contentHistory);
+        return snapshot.stream().mapToInt(Integer::intValue).max().orElse(0);
     }
 
-    public double getAverageUtilization() {
-        return utilizationHistory.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+    public synchronized double getAverageUtilization() {
+        List<Double> snapshot = new ArrayList<>(utilizationHistory);
+        return snapshot.stream().mapToDouble(Double::doubleValue).average().orElse(0);
     }
 
     public double getCurrentUtilization() {
