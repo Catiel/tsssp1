@@ -13,8 +13,6 @@ public class AnimationPanel extends JPanel {
     private SimulationEngine engine;
     private Map<String, Point> locationPositions;
     private Timer animationTimer;
-    private static final double TIMER_INTERVAL_SECONDS = 0.016; // ~60 FPS
-
     public AnimationPanel(SimulationEngine engine) {
         this.engine = engine;
         setBackground(new Color(245, 248, 252));
@@ -29,12 +27,21 @@ public class AnimationPanel extends JPanel {
         refreshLocationPositions();
     }
 
+    private long lastFrameTime = System.currentTimeMillis();
+    
     private void startAnimation() {
-        // 60 FPS animation
+        // 60 FPS animation - usa tiempo REAL para animación suave independiente de la velocidad de simulación
         animationTimer = new Timer(16, e -> {
+            long currentTime = System.currentTimeMillis();
+            double deltaSeconds = (currentTime - lastFrameTime) / 1000.0;
+            lastFrameTime = currentTime;
+            
             Crane crane = engine.getCrane();
-            // Update crane visual position smoothly
-            crane.updateVisualPosition(TIMER_INTERVAL_SECONDS);
+            
+            // Actualizar posición visual basada en TIEMPO REAL, no tiempo de simulación
+            // Esto hace que la animación sea suave sin importar qué tan rápido corra la simulación
+            crane.updateVisualPosition(deltaSeconds);
+            
             repaint();
         });
         animationTimer.start();
@@ -134,6 +141,10 @@ public class AnimationPanel extends JPanel {
             return;
         }
 
+        // Obtener la grúa y verificar si está transportando a esta ubicación
+        Crane crane = engine.getCrane();
+        Valve carryingValve = crane.getCarryingValve();
+
         int w = 140, h = 110;
         int x = pos.x - w/2;
         int y = pos.y - h/2;
@@ -187,8 +198,15 @@ public class AnimationPanel extends JPanel {
         g2d.setFont(new Font("Arial", Font.PLAIN, 11));
         g2d.drawString(cap, x + 8, y + 33);
 
-        // Draw valves
-        List<Valve> valves = loc.getAllValves();
+        // Draw valves - excluir la que está siendo transportada si la animación está en progreso
+        List<Valve> valves = new ArrayList<>(loc.getAllValves());
+        
+        // Si la grúa está en movimiento y transporta una válvula que está en esta ubicación,
+        // ocultarla hasta que la animación termine completamente
+        if (crane.isMoving() && carryingValve != null && valves.contains(carryingValve)) {
+            valves.remove(carryingValve);
+        }
+        
         if (!valves.isEmpty()) {
             int count = Math.min(10, valves.size());
             for (int i = 0; i < count; i++) {
@@ -248,6 +266,9 @@ public class AnimationPanel extends JPanel {
         if (parentLoc == null) return;
         Point pos = parentLoc.getPosition();
 
+        Crane crane = engine.getCrane();
+        Valve carryingValve = crane.getCarryingValve();
+
         // Contar unidades activas y válvulas
         int activeUnits = 0;
         int totalValves = 0;
@@ -301,16 +322,25 @@ public class AnimationPanel extends JPanel {
         // Ícono de máquina
         drawMachineIcon(g2d, x + w/2, y + 60, activeUnits > 0);
 
+        // Obtener contador de válvulas procesadas
+        statistics.LocationStats machineStats = engine.getStatistics().getLocationStats(baseName);
+        int valvesProcessed = machineStats != null ? machineStats.getValvesProcessed() : 0;
+        
         // Información de utilización
         g2d.setColor(new Color(50, 50, 70));
         g2d.setFont(new Font("Arial", Font.BOLD, 11));
-        g2d.drawString(String.format("Activas: %d/%d", activeUnits, unitCount), x + 10, y + h - 45);
+        g2d.drawString(String.format("Activas: %d/%d", activeUnits, unitCount), x + 10, y + h - 60);
         
         g2d.setFont(new Font("Arial", Font.PLAIN, 10));
-        g2d.drawString(String.format("Procesando: %d | En cola: %d", processingValves, queuedValves), x + 10, y + h - 30);
-        g2d.drawString(String.format("Util: %.1f%%", (activeUnits * 100.0 / unitCount)), x + 10, y + h - 15);
+        g2d.drawString(String.format("Procesando: %d | En cola: %d", processingValves, queuedValves), x + 10, y + h - 45);
+        g2d.drawString(String.format("Util: %.1f%%", (activeUnits * 100.0 / unitCount)), x + 10, y + h - 30);
+        
+        // Contador de válvulas procesadas
+        g2d.setColor(new Color(76, 175, 80));
+        g2d.setFont(new Font("Arial", Font.BOLD, 10));
+        g2d.drawString(String.format("✓ Procesadas: %d", valvesProcessed), x + 10, y + h - 15);
 
-        // Dibujar algunas válvulas si hay
+        // Dibujar algunas válvulas si hay - excluir la que está siendo transportada
         if (totalValves > 0) {
             List<Valve> allValves = new ArrayList<>();
             for (int i = 1; i <= unitCount; i++) {
@@ -319,6 +349,12 @@ public class AnimationPanel extends JPanel {
                     allValves.addAll(unit.getAllValves());
                 }
             }
+            
+            // No mostrar la válvula que está siendo transportada hasta que la animación termine
+            if (crane.isMoving() && carryingValve != null && allValves.contains(carryingValve)) {
+                allValves.remove(carryingValve);
+            }
+            
             int count = Math.min(8, allValves.size());
             for (int i = 0; i < count; i++) {
                 Valve v = allValves.get(i);

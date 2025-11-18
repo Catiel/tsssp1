@@ -66,6 +66,11 @@ public class ControlPanel extends JPanel {
         speedSlider.setPaintTicks(true);
         speedSlider.setPaintLabels(true);
         
+        // Update animation speed when slider changes
+        speedSlider.addChangeListener(e -> {
+            engine.setAnimationSpeed(speedSlider.getValue());
+        });
+        
         // Tooltip para explicar velocidad
         speedSlider.setToolTipText("1=Lento (ver animación), 50=Normal, 100=Rápido (resultados)");
 

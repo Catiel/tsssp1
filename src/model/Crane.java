@@ -12,13 +12,11 @@ public class Crane {
 
     // Logical position (for simulation)
     private Point logicalPosition;
-    private static final double REAL_SECONDS_PER_SIM_MINUTE = 0.45;
 
-    // Visual path (for animation)
+    // Visual path (for animation) - usa tiempo REAL para animación suave
     private List<Point> currentPathPoints;
     private List<Double> currentSegmentDistances;
     private double totalPathDistance;
-    private double traveledDistance;
     private double animationDurationSeconds;
     private double visualProgress; // 0.0 to 1.0
 
@@ -45,7 +43,6 @@ public class Crane {
         this.currentPathPoints = new ArrayList<>();
         this.currentSegmentDistances = new ArrayList<>();
         this.totalPathDistance = 0;
-        this.traveledDistance = 0;
         this.animationDurationSeconds = 0.5;
         this.visualProgress = 1.0; // Start at destination
         this.carryingValve = null;
@@ -75,6 +72,23 @@ public class Crane {
                           List<Double> segmentDistances,
                           double totalDistanceMeters,
                           double travelTimeHours) {
+        startMove(pathPoints, segmentDistances, totalDistanceMeters, travelTimeHours, 0, 50);
+    }
+    
+    public synchronized void startMove(List<Point> pathPoints,
+                          List<Double> segmentDistances,
+                          double totalDistanceMeters,
+                          double travelTimeHours,
+                          double currentSimTime) {
+        startMove(pathPoints, segmentDistances, totalDistanceMeters, travelTimeHours, currentSimTime, 50);
+    }
+    
+    public synchronized void startMove(List<Point> pathPoints,
+                          List<Double> segmentDistances,
+                          double totalDistanceMeters,
+                          double travelTimeHours,
+                          double currentSimTime,
+                          int animationSpeed) {
         if (pathPoints == null || pathPoints.size() < 2) {
             this.isMoving = false;
             this.visualProgress = 1.0;
@@ -88,11 +102,31 @@ public class Crane {
         this.currentPathPoints = new ArrayList<>(pathPoints);
         this.currentSegmentDistances = new ArrayList<>(segmentDistances);
         this.totalPathDistance = totalDistanceMeters <= 0 ? 1 : totalDistanceMeters;
-        this.traveledDistance = 0;
         
-        // Animación más rápida para que se vea el movimiento pero sin lag
-        double simMinutes = travelTimeHours * 60.0;
-        double duration = Math.max(0.5, Math.min(3.0, simMinutes * REAL_SECONDS_PER_SIM_MINUTE));
+        // ANIMACIÓN BASADA EN TIEMPO REAL - ajustada según la velocidad de simulación
+        // Speed 1-20: Animación lenta (8-4 segundos) - para ver detalles
+        // Speed 21-50: Animación normal (4-2 segundos) - balance
+        // Speed 51-80: Animación rápida (2-0.5 segundos) - más rápido
+        // Speed 81-100: Animación muy rápida (0.5-0.1 segundos) - máxima velocidad
+        double baseDuration;
+        if (animationSpeed <= 20) {
+            // Muy lento: 8 a 4 segundos
+            baseDuration = 8.0 - (animationSpeed / 20.0) * 4.0;
+        } else if (animationSpeed <= 50) {
+            // Normal: 4 a 2 segundos
+            baseDuration = 4.0 - ((animationSpeed - 20.0) / 30.0) * 2.0;
+        } else if (animationSpeed <= 80) {
+            // Rápido: 2 a 0.5 segundos
+            baseDuration = 2.0 - ((animationSpeed - 50.0) / 30.0) * 1.5;
+        } else {
+            // Muy rápido: 0.5 a 0.1 segundos
+            baseDuration = 0.5 - ((animationSpeed - 80.0) / 20.0) * 0.4;
+        }
+        
+        // Ajustar por distancia (movimientos más largos toman más tiempo)
+        double distanceFactor = Math.sqrt(totalDistanceMeters / 100.0);
+        double duration = Math.max(0.1, baseDuration * (0.7 + distanceFactor * 0.3));
+        
         this.animationDurationSeconds = duration;
         this.visualProgress = 0.0;
         this.isMoving = true;
@@ -104,46 +138,73 @@ public class Crane {
         }
 
         if (animationDurationSeconds <= 0) {
-            traveledDistance = totalPathDistance;
             isMoving = false;
             visualProgress = 1.0;
             return;
         }
 
-        double distancePerSecond = totalPathDistance / animationDurationSeconds;
-        traveledDistance += distancePerSecond * deltaSeconds;
-        if (traveledDistance >= totalPathDistance) {
-            traveledDistance = totalPathDistance;
-            isMoving = false;
+        // Actualizar progreso basado en tiempo real transcurrido
+        // Esto hace que la animación sea suave y predecible
+        double progressPerSecond = 1.0 / animationDurationSeconds;
+        visualProgress += progressPerSecond * deltaSeconds;
+        
+        if (visualProgress >= 1.0) {
             visualProgress = 1.0;
-        } else {
-            visualProgress = traveledDistance / totalPathDistance;
+            isMoving = false;
         }
     }
+    
+
 
     public synchronized Point getInterpolatedPosition() {
         if (currentPathPoints.isEmpty()) {
             return new Point(logicalPosition);
         }
-        if (!isMoving || traveledDistance >= totalPathDistance || currentSegmentDistances.isEmpty()) {
+        
+        // Si no está en movimiento o ya terminó, retornar la posición final
+        if (!isMoving || visualProgress >= 1.0) {
             return new Point(currentPathPoints.get(currentPathPoints.size() - 1));
         }
+        
+        // Si apenas está comenzando, retornar la posición inicial
+        if (visualProgress <= 0.0) {
+            return new Point(currentPathPoints.get(0));
+        }
 
-        double remaining = traveledDistance;
-        for (int i = 0; i < currentSegmentDistances.size(); i++) {
-            double segment = currentSegmentDistances.get(i);
-            if (remaining > segment && i < currentSegmentDistances.size() - 1) {
-                remaining -= segment;
-                continue;
-            }
-            double ratio = segment == 0 ? 1.0 : Math.min(1.0, remaining / segment);
-            Point from = currentPathPoints.get(i);
-            Point to = currentPathPoints.get(i + 1);
-            int x = (int)Math.round(from.x + (to.x - from.x) * ratio);
-            int y = (int)Math.round(from.y + (to.y - from.y) * ratio);
+        if (currentSegmentDistances.isEmpty() || totalPathDistance <= 0) {
+            // Sin datos de segmentos, interpolar linealmente entre inicio y fin
+            Point from = currentPathPoints.get(0);
+            Point to = currentPathPoints.get(currentPathPoints.size() - 1);
+            int x = (int)Math.round(from.x + (to.x - from.x) * visualProgress);
+            int y = (int)Math.round(from.y + (to.y - from.y) * visualProgress);
             return new Point(x, y);
         }
 
+        // Calcular la distancia objetivo basada en el progreso visual
+        double targetDistance = totalPathDistance * visualProgress;
+        double accumulatedDistance = 0;
+
+        // Encontrar en qué segmento del path estamos
+        for (int i = 0; i < currentSegmentDistances.size(); i++) {
+            double segmentLength = currentSegmentDistances.get(i);
+            double nextAccumulated = accumulatedDistance + segmentLength;
+            
+            if (targetDistance <= nextAccumulated || i == currentSegmentDistances.size() - 1) {
+                // Estamos en este segmento
+                double distanceInSegment = targetDistance - accumulatedDistance;
+                double ratio = segmentLength == 0 ? 1.0 : Math.min(1.0, distanceInSegment / segmentLength);
+                
+                Point from = currentPathPoints.get(i);
+                Point to = currentPathPoints.get(i + 1);
+                int x = (int)Math.round(from.x + (to.x - from.x) * ratio);
+                int y = (int)Math.round(from.y + (to.y - from.y) * ratio);
+                return new Point(x, y);
+            }
+            
+            accumulatedDistance = nextAccumulated;
+        }
+
+        // Fallback: retornar la última posición
         return new Point(currentPathPoints.get(currentPathPoints.size() - 1));
     }
 
@@ -165,7 +226,6 @@ public class Crane {
         // Forzar completado de animación
         visualProgress = 1.0;
         isMoving = false;
-        traveledDistance = totalPathDistance;
         
         // Actualizar posición lógica al destino final
         if (!currentPathPoints.isEmpty()) {

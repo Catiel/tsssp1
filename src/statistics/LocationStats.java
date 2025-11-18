@@ -8,12 +8,14 @@ public class LocationStats {
     private List<Integer> contentHistory;
     private List<Double> utilizationHistory;
     private List<Double> timeHistory;
+    private int valvesProcessed; // Contador de válvulas procesadas
 
     public LocationStats(String name) {
         this.name = name;
         this.contentHistory = Collections.synchronizedList(new ArrayList<>());
         this.utilizationHistory = Collections.synchronizedList(new ArrayList<>());
         this.timeHistory = Collections.synchronizedList(new ArrayList<>());
+        this.valvesProcessed = 0;
     }
 
     public synchronized void update(int contents, double utilization, double time) {
@@ -41,10 +43,14 @@ public class LocationStats {
         return utilizationHistory.isEmpty() ? 0 : utilizationHistory.get(utilizationHistory.size() - 1);
     }
 
+    public synchronized void incrementValvesProcessed() {
+        valvesProcessed++;
+    }
+    
     public String getReport() {
-        return String.format("%-12s | Cont Prom: %6.2f | Max: %4.0f | Utilizacion: %5.1f%%",
+        return String.format("%-12s | Cont Prom: %6.2f | Max: %4.0f | Utilizacion: %5.1f%% | Procesadas: %d",
             Localization.getLocationDisplayName(name),
-            getAverageContents(), getMaxContents(), getCurrentUtilization());
+            getAverageContents(), getMaxContents(), getCurrentUtilization(), valvesProcessed);
     }
 
     // Getters
@@ -52,4 +58,5 @@ public class LocationStats {
     public List<Integer> getContentHistory() { return new ArrayList<>(contentHistory); }
     public List<Double> getUtilizationHistory() { return new ArrayList<>(utilizationHistory); }
     public List<Double> getTimeHistory() { return new ArrayList<>(timeHistory); }
+    public int getValvesProcessed() { return valvesProcessed; }
 }

@@ -7,7 +7,9 @@ import utils.Localization;
 import org.jfree.chart.*;
 import org.jfree.chart.plot.*;
 import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer;
+import org.jfree.chart.renderer.category.BarRenderer;
 import org.jfree.data.xy.*;
+import org.jfree.data.category.*;
 import javax.swing.*;
 import java.awt.*;
 import java.util.*;
@@ -20,16 +22,18 @@ public class ChartsPanel extends JPanel {
     private ChartPanel utilizationChart;
     private ChartPanel wipChart;
     private ChartPanel craneUtilizationChart;
+    private ChartPanel utilizationBarChart;
 
     // Datasets
     private XYSeriesCollection entityDataset;
     private XYSeriesCollection utilizationDataset;
     private XYSeriesCollection wipDataset;
     private XYSeriesCollection craneDataset;
+    private DefaultCategoryDataset utilizationBarDataset;
 
     public ChartsPanel(SimulationEngine engine) {
         this.engine = engine;
-        setLayout(new GridLayout(2, 2, 10, 10));
+        setLayout(new BorderLayout(10, 10));
         setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
         initializeCharts();
@@ -109,6 +113,21 @@ public class ChartsPanel extends JPanel {
         XYPlot cranePlot = craneChart.getXYPlot();
         cranePlot.getRangeAxis().setRange(0, 100);
         craneUtilizationChart = new ChartPanel(craneChart);
+        
+        // Utilization Bar Chart (nuevo)
+        utilizationBarDataset = new DefaultCategoryDataset();
+        JFreeChart barChart = ChartFactory.createBarChart(
+            "Utilizacion de Ubicaciones",
+            "Ubicacion",
+            "Utilizacion (%)",
+            utilizationBarDataset,
+            PlotOrientation.VERTICAL,
+            true, true, false
+        );
+        styleBarChart(barChart);
+        CategoryPlot barPlot = barChart.getCategoryPlot();
+        barPlot.getRangeAxis().setRange(0, 100);
+        utilizationBarChart = new ChartPanel(barChart);
     }
 
     private void styleChart(JFreeChart chart) {
@@ -140,12 +159,38 @@ public class ChartsPanel extends JPanel {
 
         plot.setRenderer(renderer);
     }
+    
+    private void styleBarChart(JFreeChart chart) {
+        chart.setBackgroundPaint(new Color(250, 250, 250));
+        chart.getTitle().setFont(new Font("Segoe UI", Font.BOLD, 14));
+
+        CategoryPlot plot = chart.getCategoryPlot();
+        plot.setBackgroundPaint(Color.WHITE);
+        plot.setDomainGridlinePaint(new Color(200, 200, 200));
+        plot.setRangeGridlinePaint(new Color(200, 200, 200));
+
+        BarRenderer renderer = (BarRenderer) plot.getRenderer();
+        renderer.setDrawBarOutline(true);
+        
+        // Color para las barras de utilización
+        renderer.setSeriesPaint(0, new Color(33, 150, 243));    // Azul para utilización
+    }
 
     private void layoutCharts() {
-        add(entityProgressChart);
-        add(utilizationChart);
-        add(wipChart);
-        add(craneUtilizationChart);
+        JPanel topPanel = new JPanel(new GridLayout(1, 2, 10, 10));
+        topPanel.add(entityProgressChart);
+        topPanel.add(utilizationChart);
+        
+        JPanel middlePanel = new JPanel(new GridLayout(1, 2, 10, 10));
+        middlePanel.add(wipChart);
+        middlePanel.add(craneUtilizationChart);
+        
+        JPanel mainPanel = new JPanel(new GridLayout(2, 1, 10, 10));
+        mainPanel.add(topPanel);
+        mainPanel.add(middlePanel);
+        
+        add(mainPanel, BorderLayout.CENTER);
+        add(utilizationBarChart, BorderLayout.SOUTH);
     }
 
     public void updateCharts() {
@@ -153,6 +198,7 @@ public class ChartsPanel extends JPanel {
         updateMachineUtilization();
         updateWIP();
         updateCraneUtilization();
+        updateUtilizationBars();
     }
 
     private void updateEntityProgress() {
@@ -267,6 +313,60 @@ public class ChartsPanel extends JPanel {
         if (series.getItemCount() == 0 ||
             series.getX(series.getItemCount() - 1).doubleValue() < currentTime) {
             series.add(currentTime, utilization);
+        }
+    }
+    
+    private void updateUtilizationBars() {
+        utilizationBarDataset.clear();
+        
+        double currentTime = engine.getCurrentTime();
+        
+        Map<String, Integer> groupSizes = Map.of(
+            "M1", 10,
+            "M2", 25,
+            "M3", 17
+        );
+        
+        // Agregar datos para cada máquina
+        for (Map.Entry<String, Integer> entry : groupSizes.entrySet()) {
+            String machineName = entry.getKey();
+            int unitCount = entry.getValue();
+            String displayName = Localization.getLocationDisplayName(machineName);
+            
+            // Calcular utilización
+            double busySum = 0;
+            int countedUnits = 0;
+            for (int i = 1; i <= unitCount; i++) {
+                model.Location unit = engine.getLocations().get(machineName + "." + i);
+                if (unit != null) {
+                    busySum += unit.getTotalBusyTime();
+                    countedUnits++;
+                }
+            }
+            
+            if (countedUnits == 0) continue;
+            
+            utils.Config config = utils.Config.getInstance();
+            double statsUnits = config.getMachineStatsUnits(machineName, countedUnits);
+            double scheduledPerUnit = engine.getShiftCalendar().getTotalWorkingHoursPerWeek();
+            double weeksSimulated = Math.max(currentTime, 1e-6) / 168.0;
+            double totalScheduled = statsUnits * scheduledPerUnit * weeksSimulated;
+            double utilization = (totalScheduled > 0.0) ? (busySum / totalScheduled) * 100.0 : 0.0;
+            utilization = Math.min(utilization, 100.0);
+            
+            // Solo agregar utilización
+            utilizationBarDataset.addValue(utilization, "Utilización", displayName);
+        }
+        
+        // Agregar almacenes
+        for (String almacenName : Arrays.asList("Almacen_M1", "Almacen_M2", "Almacen_M3")) {
+            model.Location location = engine.getLocations().get(almacenName);
+            String displayName = Localization.getLocationDisplayName(almacenName);
+            
+            if (location != null) {
+                double utilization = location.getUtilization();
+                utilizationBarDataset.addValue(utilization, "Utilización", displayName);
+            }
         }
     }
 }

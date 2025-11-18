@@ -2,6 +2,7 @@ package core;
 
 import model.*;
 import statistics.Statistics;
+import statistics.LocationStats;
 import utils.Config;
 import java.awt.Point;
 import java.util.*;
@@ -16,6 +17,7 @@ public class SimulationEngine {
     private final double endTime;
     private boolean isRunning;
     private boolean isPaused;
+    private int animationSpeed = 50; // Default medium speed (1-100)
 
     // Model components
     private Map<String, Location> locations;
@@ -167,6 +169,17 @@ public class SimulationEngine {
                     break;
                 }
             }
+            
+            // ESPERAR mientras la animación de la grúa está en progreso
+            // Esto hace que la simulación se RALENTICE para que la animación sea visible
+            if (crane.isMoving()) {
+                try {
+                    Thread.sleep(50); // Esperar 50ms y revisar de nuevo
+                    continue;
+                } catch (InterruptedException e) {
+                    break;
+                }
+            }
 
             Event event = eventQueue.poll();
             if (event != null) {
@@ -201,6 +214,14 @@ public class SimulationEngine {
                 handleStartCraneMove(event.getValve(), (String) event.getData());
                 break;
             case END_CRANE_MOVE:
+                // Esperar a que la animación termine antes de procesar
+                while (crane.isMoving()) {
+                    try {
+                        Thread.sleep(50);
+                    } catch (InterruptedException e) {
+                        break;
+                    }
+                }
                 handleEndCraneMove(event.getValve(), (String) event.getData());
                 break;
             case SHIFT_START:
@@ -234,6 +255,16 @@ public class SimulationEngine {
         Location machineUnit = valve.getCurrentLocation();
         valve.endProcessing(currentTime);
         valve.advanceStep();
+        
+        // Incrementar contador de válvulas procesadas para esta ubicación
+        if (machineUnit != null) {
+            String unitName = machineUnit.getName();
+            String machineBaseName = unitName.contains(".") ? unitName.substring(0, unitName.indexOf(".")) : unitName;
+            LocationStats machineStats = statistics.getLocationStats(machineBaseName);
+            if (machineStats != null) {
+                machineStats.incrementValvesProcessed();
+            }
+        }
 
         // Verificar si hay espacio en destino ANTES de liberar máquina
         String destination = getNextDestination(valve);
@@ -565,7 +596,8 @@ public class SimulationEngine {
         valve.addMovementTime(travelTime);
         valve.endWaiting(currentTime);
 
-        crane.startMove(pathPoints, segmentDistances, totalDistanceMeters, travelTime);
+        // Pasar el tiempo actual de simulación y la velocidad de animación
+        crane.startMove(pathPoints, segmentDistances, totalDistanceMeters, travelTime, currentTime, animationSpeed);
 
         if (from.getName().equals("DOCK")) {
             dockToAlmacenMoves++;
@@ -599,9 +631,7 @@ public class SimulationEngine {
 
         // Sincronizar animación antes de liberar
         crane.completeTrip();
-        crane.releaseValve();
-        crane.setBusy(false);
-
+        
         if (destination.equals("STOCK")) {
             destLoc.addToQueue(valve);
             valve.setState(Valve.State.COMPLETED);
@@ -621,6 +651,9 @@ public class SimulationEngine {
                 checkMachineQueue(machineParent, destLoc);
             }
         }
+        
+        crane.releaseValve();
+        crane.setBusy(false);
         
         // CRÍTICO: Verificar válvulas bloqueadas que ahora pueden moverse
         checkBlockedValves();
@@ -742,6 +775,8 @@ public class SimulationEngine {
     public Map<String, Location> getLocations() { return locations; }
     public Crane getCrane() { return crane; }
     public Statistics getStatistics() { return statistics; }
+    public int getAnimationSpeed() { return animationSpeed; }
+    public void setAnimationSpeed(int speed) { this.animationSpeed = Math.max(1, Math.min(100, speed)); }
     public ShiftCalendar getShiftCalendar() { return shiftCalendar; }
     public List<Valve> getAllValves() { return new ArrayList<>(allValves); }
     public List<Valve> getCompletedValves() { return new ArrayList<>(completedValves); }
