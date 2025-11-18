@@ -71,6 +71,7 @@ public class StatisticsPanel extends JPanel {
         summaryArea = new JTextArea();
         summaryArea.setEditable(false);
         summaryArea.setFont(new Font("Monospaced", Font.PLAIN, 11));
+        summaryArea.setForeground(Color.BLACK);
         summaryArea.setBackground(new Color(250, 250, 250));
         summaryArea.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createTitledBorder("Resumen de la Simulacion"),

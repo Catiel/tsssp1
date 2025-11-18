@@ -48,9 +48,9 @@ public class MainFrame extends JFrame {
         mainPanel.add(controlPanel, BorderLayout.SOUTH);
 
         // FIXED: Remove createIconLabel() calls - just use strings
-        tabbedPane.addTab("🎬 Simulacion", mainPanel);
-        tabbedPane.addTab("📊 Graficas", chartsPanel);
-        tabbedPane.addTab("📈 Estadisticas", statisticsPanel);
+        tabbedPane.addTab("Simulacion", mainPanel);
+        tabbedPane.addTab("Graficas", chartsPanel);
+        tabbedPane.addTab("Estadisticas", statisticsPanel);
 
         add(tabbedPane, BorderLayout.CENTER);
 

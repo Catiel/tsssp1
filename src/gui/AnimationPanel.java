@@ -338,7 +338,7 @@ public class AnimationPanel extends JPanel {
         // Contador de válvulas procesadas
         g2d.setColor(new Color(76, 175, 80));
         g2d.setFont(new Font("Arial", Font.BOLD, 10));
-        g2d.drawString(String.format("✓ Procesadas: %d", valvesProcessed), x + 10, y + h - 15);
+        g2d.drawString(String.format("Procesadas: %d", valvesProcessed), x + 10, y + h - 15);
 
         // Dibujar algunas válvulas si hay - excluir la que está siendo transportada
         if (totalValves > 0) {

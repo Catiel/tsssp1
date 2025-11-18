@@ -42,10 +42,10 @@ public class ControlPanel extends JPanel {
 
     private void initializeComponents() {
         // Buttons
-        startButton = createStyledButton("▶ Iniciar", new Color(76, 175, 80));
-        pauseButton = createStyledButton("⏸ Pausa", new Color(255, 152, 0));
-        stepButton = createStyledButton("⏭ Paso", new Color(33, 150, 243));
-        resetButton = createStyledButton("🔄 Reiniciar", new Color(244, 67, 54));
+        startButton = createStyledButton("Iniciar", new Color(76, 175, 80));
+        pauseButton = createStyledButton("Pausa", new Color(255, 152, 0));
+        stepButton = createStyledButton("Paso", new Color(33, 150, 243));
+        resetButton = createStyledButton("Reiniciar", new Color(244, 67, 54));
 
         pauseButton.setEnabled(false);
 
@@ -218,12 +218,12 @@ public class ControlPanel extends JPanel {
         if (isRunning) {
             if (engine.isPaused()) {
                 engine.resume();
-                pauseButton.setText("⏸ Pausa");
+                pauseButton.setText("Pausa");
                 statusLabel.setText("Estado: Ejecutando");
                 Logger.getInstance().info("Simulation resumed");
             } else {
                 engine.pause();
-                pauseButton.setText("▶ Reanudar");
+                pauseButton.setText("Reanudar");
                 statusLabel.setText("Estado: En Pausa");
                 Logger.getInstance().info("Simulation paused");
             }
@@ -242,7 +242,7 @@ public class ControlPanel extends JPanel {
         updateTimer.stop();
         startButton.setEnabled(true);
         pauseButton.setEnabled(false);
-        pauseButton.setText("⏸ Pausa");
+        pauseButton.setText("Pausa");
         stepButton.setEnabled(true);
         statusLabel.setText("Estado: Detenido");
     }
