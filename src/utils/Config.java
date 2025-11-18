@@ -48,6 +48,7 @@ public class Config {
         shift.start_hour=6
         shift.end_hour=22
         shift.working_days=Monday,Tuesday,Wednesday,Thursday,Friday
+        shift.blocks=6-14,14-22
         
         # Animation Settings
         animation.fps=60
@@ -219,6 +220,28 @@ public class Config {
     public String[] getWorkingDays() {
         String days = getString("shift.working_days", "Monday,Tuesday,Wednesday,Thursday,Friday");
         return days.split(",");
+    }
+
+    public List<int[]> getShiftBlocks() {
+        String blocksValue = getString("shift.blocks", "").trim();
+        List<int[]> blocks = new ArrayList<>();
+        if (!blocksValue.isEmpty()) {
+            String[] parts = blocksValue.split(",");
+            for (String part : parts) {
+                String[] range = part.trim().split("-");
+                if (range.length == 2) {
+                    try {
+                        int start = Integer.parseInt(range[0].trim());
+                        int end = Integer.parseInt(range[1].trim());
+                        if (start >= 0 && end <= 24 && start < end) {
+                            blocks.add(new int[]{start, end});
+                        }
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+        }
+        return blocks;
     }
 
     public int getUIWidth() {

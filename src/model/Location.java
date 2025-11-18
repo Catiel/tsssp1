@@ -93,16 +93,18 @@ public class Location {
         return (totalBusyTime / (totalTime * units)) * 100.0;
     }
 
-    public double getAverageContents() {
+    public synchronized double getAverageContents() {
         if (contentHistory.isEmpty()) return 0;
-        return contentHistory.stream()
+        List<Integer> snapshot = new ArrayList<>(contentHistory);
+        return snapshot.stream()
             .mapToInt(Integer::intValue)
             .average()
             .orElse(0.0);
     }
 
-    public double getMaxContents() {
-        return contentHistory.stream()
+    public synchronized double getMaxContents() {
+        List<Integer> snapshot = new ArrayList<>(contentHistory);
+        return snapshot.stream()
             .mapToInt(Integer::intValue)
             .max()
             .orElse(0);

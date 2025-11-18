@@ -2,67 +2,49 @@ package gui;
 
 import core.SimulationEngine;
 import model.*;
+import utils.Localization;
 import javax.swing.*;
+import javax.swing.Timer;
 import java.awt.*;
-import java.awt.geom.*;
 import java.util.*;
 import java.util.List;
 
 public class AnimationPanel extends JPanel {
     private SimulationEngine engine;
-
-    // Visual constants
-    private static final int LOCATION_WIDTH = 120;
-    private static final int LOCATION_HEIGHT = 80;
-    private static final int VALVE_SIZE = 12;
-    private static final int CRANE_WIDTH = 40;
-    private static final int CRANE_HEIGHT = 30;
-
-    // Colors
-    private static final Color BACKGROUND_COLOR = new Color(245, 245, 250);
-    private static final Color GRID_COLOR = new Color(220, 220, 230);
-    private static final Color PATH_COLOR = new Color(100, 100, 150);
-    private static final Color DOCK_COLOR = new Color(135, 206, 250);
-    private static final Color STOCK_COLOR = new Color(144, 238, 144);
-    private static final Color ALMACEN_COLOR = new Color(255, 248, 220);
-    private static final Color MACHINE_COLOR = new Color(255, 218, 185);
-    private static final Color CRANE_COLOR = new Color(70, 70, 70);
-
-    // Animation
-    private Map<Location, Point> locationPositions;
-    private double animationTime = 0;
+    private Map<String, Point> locationPositions;
+    private Timer animationTimer;
+    private static final double TIMER_INTERVAL_SECONDS = 0.016; // ~60 FPS
 
     public AnimationPanel(SimulationEngine engine) {
         this.engine = engine;
-        setBackground(BACKGROUND_COLOR);
-        setPreferredSize(new Dimension(1000, 700));
+        setBackground(new Color(245, 248, 252));
+        setPreferredSize(new Dimension(1100, 650));
 
-        initializePositions();
+        initializeLayout();
+        startAnimation();
     }
 
-    private void initializePositions() {
+    private void initializeLayout() {
         locationPositions = new HashMap<>();
+        refreshLocationPositions();
+    }
 
-        // Define visual positions (different from logical positions for better layout)
-        locationPositions.put(engine.getLocations().get("DOCK"),
-            new Point(50, 100));
-        locationPositions.put(engine.getLocations().get("STOCK"),
-            new Point(50, 400));
+    private void startAnimation() {
+        // 60 FPS animation
+        animationTimer = new Timer(16, e -> {
+            Crane crane = engine.getCrane();
+            // Update crane visual position smoothly
+            crane.updateVisualPosition(TIMER_INTERVAL_SECONDS);
+            repaint();
+        });
+        animationTimer.start();
+    }
 
-        locationPositions.put(engine.getLocations().get("Almacen_M1"),
-            new Point(300, 50));
-        locationPositions.put(engine.getLocations().get("M1"),
-            new Point(300, 150));
-
-        locationPositions.put(engine.getLocations().get("Almacen_M2"),
-            new Point(500, 50));
-        locationPositions.put(engine.getLocations().get("M2"),
-            new Point(500, 150));
-
-        locationPositions.put(engine.getLocations().get("Almacen_M3"),
-            new Point(700, 50));
-        locationPositions.put(engine.getLocations().get("M3"),
-            new Point(700, 150));
+    private void refreshLocationPositions() {
+        Map<String, Location> locs = engine.getLocations();
+        for (Map.Entry<String, Location> entry : locs.entrySet()) {
+            locationPositions.put(entry.getKey(), new Point(entry.getValue().getPosition()));
+        }
     }
 
     @Override
@@ -70,396 +52,293 @@ public class AnimationPanel extends JPanel {
         super.paintComponent(g);
         Graphics2D g2d = (Graphics2D) g;
 
-        // Enable anti-aliasing for smooth graphics
-        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
-            RenderingHints.VALUE_ANTIALIAS_ON);
-        g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
-            RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 
-        // Draw background grid
-        drawGrid(g2d);
+        refreshLocationPositions();
 
-        // Draw crane path network
-        drawPathNetwork(g2d);
+        // Draw network paths and nodes
+        drawNetwork(g2d);
 
         // Draw all locations
-        for (Location loc : engine.getLocations().values()) {
-            drawLocation(g2d, loc);
+        drawLocation(g2d, "DOCK");
+        drawLocation(g2d, "STOCK");
+        drawLocation(g2d, "Almacen_M1");
+        drawLocation(g2d, "M1");
+        drawLocation(g2d, "Almacen_M2");
+        drawLocation(g2d, "M2");
+        drawLocation(g2d, "Almacen_M3");
+        drawLocation(g2d, "M3");
+
+        // Draw crane (must be AFTER locations so it's on top)
+        drawCrane(g2d);
+
+        // Draw info
+        drawInfo(g2d);
+    }
+
+    private void drawNetwork(Graphics2D g2d) {
+        PathNetwork network = engine.getPathNetwork();
+        if (network == null) {
+            return;
         }
 
-        // Draw crane
-        drawCrane(g2d, engine.getCrane());
-
-        // Draw floating information
-        drawFloatingInfo(g2d);
-
-        animationTime += 0.016; // ~60 FPS
-    }
-
-    private void drawGrid(Graphics2D g2d) {
-        g2d.setColor(GRID_COLOR);
-        g2d.setStroke(new BasicStroke(0.5f));
-
-        int spacing = 50;
-        for (int x = 0; x < getWidth(); x += spacing) {
-            g2d.drawLine(x, 0, x, getHeight());
-        }
-        for (int y = 0; y < getHeight(); y += spacing) {
-            g2d.drawLine(0, y, getWidth(), y);
-        }
-    }
-
-    private void drawPathNetwork(Graphics2D g2d) {
-        g2d.setColor(PATH_COLOR);
-        g2d.setStroke(new BasicStroke(3.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-
-        // Draw main horizontal rails
-        g2d.drawLine(50, 130, 850, 130); // Top rail
-        g2d.drawLine(50, 180, 850, 180); // Bottom rail
-
-        // Draw vertical connectors
-        int[] xPositions = {50, 300, 500, 700, 850};
-        for (int x : xPositions) {
-            g2d.drawLine(x, 130, x, 180);
-        }
-
-        // Draw decorative elements
-        g2d.setColor(new Color(PATH_COLOR.getRed(), PATH_COLOR.getGreen(),
-            PATH_COLOR.getBlue(), 50));
-        g2d.setStroke(new BasicStroke(10.0f));
-        g2d.drawLine(50, 130, 850, 130);
-    }
-
-    private void drawLocation(Graphics2D g2d, Location loc) {
-        Point pos = locationPositions.get(loc);
-        if (pos == null) return;
-
-        int x = pos.x;
-        int y = pos.y;
-
-        // Choose color based on location type
-        Color bgColor = getLocationColor(loc.getName());
-        Color borderColor = bgColor.darker();
-
-        // Draw shadow
-        g2d.setColor(new Color(0, 0, 0, 30));
-        g2d.fillRoundRect(x + 5, y + 5, LOCATION_WIDTH, LOCATION_HEIGHT, 15, 15);
-
-        // Draw location box with gradient
-        GradientPaint gradient = new GradientPaint(
-            x, y, bgColor.brighter(),
-            x, y + LOCATION_HEIGHT, bgColor
-        );
-        g2d.setPaint(gradient);
-        g2d.fillRoundRect(x, y, LOCATION_WIDTH, LOCATION_HEIGHT, 15, 15);
-
-        // Draw border
-        g2d.setColor(borderColor);
-        g2d.setStroke(new BasicStroke(2.5f));
-        g2d.drawRoundRect(x, y, LOCATION_WIDTH, LOCATION_HEIGHT, 15, 15);
-
-        // Draw location name
-        g2d.setColor(Color.BLACK);
-        g2d.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        FontMetrics fm = g2d.getFontMetrics();
-        String name = loc.getName();
-        int nameWidth = fm.stringWidth(name);
-        g2d.drawString(name, x + (LOCATION_WIDTH - nameWidth) / 2, y + 20);
-
-        // Draw capacity info
-        g2d.setFont(new Font("Segoe UI", Font.PLAIN, 10));
-        String capacityStr = String.format("Cap: %d/%s",
-            loc.getCurrentContents(),
-            loc.getCapacity() == Integer.MAX_VALUE ? "∞" : loc.getCapacity());
-        int capWidth = g2d.getFontMetrics().stringWidth(capacityStr);
-        g2d.drawString(capacityStr, x + (LOCATION_WIDTH - capWidth) / 2, y + 35);
-
-        // Draw capacity bar
-        if (loc.getCapacity() != Integer.MAX_VALUE) {
-            int barWidth = LOCATION_WIDTH - 20;
-            int barHeight = 8;
-            int barX = x + 10;
-            int barY = y + 40;
-
-            double fillPercent = (double) loc.getCurrentContents() / loc.getCapacity();
-            int fillWidth = (int) (barWidth * fillPercent);
-
-            // Bar background
-            g2d.setColor(Color.LIGHT_GRAY);
-            g2d.fillRoundRect(barX, barY, barWidth, barHeight, 4, 4);
-
-            // Bar fill with color based on utilization
-            Color barColor = getUtilizationColor(fillPercent);
-            g2d.setColor(barColor);
-            g2d.fillRoundRect(barX, barY, fillWidth, barHeight, 4, 4);
-
-            // Bar border
-            g2d.setColor(Color.DARK_GRAY);
-            g2d.setStroke(new BasicStroke(1.0f));
-            g2d.drawRoundRect(barX, barY, barWidth, barHeight, 4, 4);
-        }
-
-        // Draw valves in location
-        drawValvesInLocation(g2d, loc, x, y);
-
-        // Draw processing indicator for machines
-        if (loc.getName().startsWith("M") && loc.getProcessingSize() > 0) {
-            drawProcessingIndicator(g2d, x, y);
-        }
-    }
-
-    private Color getLocationColor(String name) {
-        if (name.equals("DOCK")) return DOCK_COLOR;
-        if (name.equals("STOCK")) return STOCK_COLOR;
-        if (name.startsWith("Almacen")) return ALMACEN_COLOR;
-        if (name.startsWith("M")) return MACHINE_COLOR;
-        return Color.WHITE;
-    }
-
-    private Color getUtilizationColor(double utilization) {
-        if (utilization < 0.5) return new Color(76, 175, 80);  // Green
-        if (utilization < 0.75) return new Color(255, 193, 7); // Yellow
-        if (utilization < 0.9) return new Color(255, 152, 0);  // Orange
-        return new Color(244, 67, 54); // Red
-    }
-
-    private void drawValvesInLocation(Graphics2D g2d, Location loc, int locX, int locY) {
-        List<Valve> valves = loc.getAllValves();
-        int maxDisplay = 8;
-        int displayCount = Math.min(valves.size(), maxDisplay);
-
-        int startX = locX + 10;
-        int startY = locY + 55;
-        int spacing = (LOCATION_WIDTH - 20) / Math.max(displayCount, 1);
-
-        for (int i = 0; i < displayCount; i++) {
-            Valve valve = valves.get(i);
-            int vx = startX + i * spacing;
-            int vy = startY;
-
-            drawValve(g2d, valve, vx, vy);
-        }
-
-        // Draw "+N more" if there are more valves
-        if (valves.size() > maxDisplay) {
-            g2d.setColor(Color.DARK_GRAY);
-            g2d.setFont(new Font("Segoe UI", Font.PLAIN, 9));
-            String moreText = "+" + (valves.size() - maxDisplay) + " more";
-            g2d.drawString(moreText, locX + 10, locY + LOCATION_HEIGHT - 5);
-        }
-    }
-
-    private void drawValve(Graphics2D g2d, Valve valve, int x, int y) {
-        Color color = valve.getType().getColor();
-
-        // Draw shadow
-        g2d.setColor(new Color(0, 0, 0, 50));
-        g2d.fillOval(x + 2, y + 2, VALVE_SIZE, VALVE_SIZE);
-
-        // Draw valve with gradient
-        GradientPaint gradient = new GradientPaint(
-            x, y, color.brighter(),
-            x, y + VALVE_SIZE, color
-        );
-        g2d.setPaint(gradient);
-        g2d.fillOval(x, y, VALVE_SIZE, VALVE_SIZE);
-
-        // Draw border
-        g2d.setColor(color.darker());
-        g2d.setStroke(new BasicStroke(1.5f));
-        g2d.drawOval(x, y, VALVE_SIZE, VALVE_SIZE);
-
-        // Draw state indicator
-        drawStateIndicator(g2d, valve.getState(), x + VALVE_SIZE / 2, y - 2);
-    }
-
-    private void drawStateIndicator(Graphics2D g2d, Valve.State state, int x, int y) {
-        int size = 4;
-        Color color;
-
-        switch (state) {
-            case PROCESSING:
-                color = new Color(76, 175, 80); // Green
-                break;
-            case IN_TRANSIT:
-                color = new Color(33, 150, 243); // Blue
-                break;
-            case WAITING_CRANE:
-                color = new Color(255, 193, 7); // Yellow
-                break;
-            case BLOCKED:
-                color = new Color(244, 67, 54); // Red
-                break;
-            default:
-                return;
-        }
-
-        g2d.setColor(color);
-        g2d.fillOval(x - size/2, y - size/2, size, size);
-    }
-
-    private void drawProcessingIndicator(Graphics2D g2d, int x, int y) {
-        // Animated gear/processing icon
-        double angle = animationTime * 2;
-        int centerX = x + LOCATION_WIDTH - 20;
-        int centerY = y + 10;
-        int radius = 8;
-
-        g2d.setColor(new Color(76, 175, 80));
-        for (int i = 0; i < 8; i++) {
-            double a = angle + (i * Math.PI / 4);
-            int x1 = centerX + (int)(Math.cos(a) * radius);
-            int y1 = centerY + (int)(Math.sin(a) * radius);
-            int x2 = centerX + (int)(Math.cos(a) * (radius + 3));
-            int y2 = centerY + (int)(Math.sin(a) * (radius + 3));
-            g2d.setStroke(new BasicStroke(2.0f));
-            g2d.drawLine(x1, y1, x2, y2);
-        }
-
-        g2d.fillOval(centerX - 3, centerY - 3, 6, 6);
-    }
-
-    private void drawCrane(Graphics2D g2d, Crane crane) {
-        Point pos = crane.getInterpolatedPosition();
-
-        // Scale position to match our visual layout
-        int x = pos.x;
-        int y = 155; // Fixed y position on the rail
-
-        // Draw crane shadow
-        g2d.setColor(new Color(0, 0, 0, 30));
-        g2d.fillRoundRect(x - CRANE_WIDTH/2 + 3, y - CRANE_HEIGHT + 3,
-            CRANE_WIDTH, CRANE_HEIGHT, 5, 5);
-
-        // Draw crane body
-        GradientPaint gradient = new GradientPaint(
-            x, y - CRANE_HEIGHT, CRANE_COLOR.brighter(),
-            x, y, CRANE_COLOR
-        );
-        g2d.setPaint(gradient);
-        g2d.fillRoundRect(x - CRANE_WIDTH/2, y - CRANE_HEIGHT,
-            CRANE_WIDTH, CRANE_HEIGHT, 5, 5);
-
-        // Draw crane border
-        g2d.setColor(CRANE_COLOR.darker());
-        g2d.setStroke(new BasicStroke(2.0f));
-        g2d.drawRoundRect(x - CRANE_WIDTH/2, y - CRANE_HEIGHT,
-            CRANE_WIDTH, CRANE_HEIGHT, 5, 5);
-
-        // Draw crane hook/cable
-        g2d.setColor(Color.DARK_GRAY);
-        g2d.setStroke(new BasicStroke(2.0f));
-        int hookY = y + 5;
-        g2d.drawLine(x, y, x, hookY);
-
-        // Draw hook
-        g2d.fillOval(x - 3, hookY - 3, 6, 6);
-
-        // Draw valve being carried
-        Valve carrying = crane.getCarryingValve();
-        if (carrying != null) {
-            drawValve(g2d, carrying, x - VALVE_SIZE/2, hookY + 5);
-
-            // Draw connection line
-            g2d.setColor(Color.BLACK);
-            g2d.setStroke(new BasicStroke(1.0f, BasicStroke.CAP_BUTT,
-                BasicStroke.JOIN_BEVEL, 0, new float[]{2}, 0));
-            g2d.drawLine(x, hookY, x, hookY + 5);
-        }
-
-        // Draw crane label
-        g2d.setColor(Color.WHITE);
-        g2d.setFont(new Font("Segoe UI", Font.BOLD, 10));
-        String label = crane.isBusy() ? "BUSY" : "IDLE";
-        FontMetrics fm = g2d.getFontMetrics();
-        int labelWidth = fm.stringWidth(label);
-        g2d.drawString(label, x - labelWidth/2, y - CRANE_HEIGHT/2 + 5);
-
-        // Draw status indicator
-        Color statusColor = crane.isBusy() ?
-            new Color(255, 152, 0) : new Color(76, 175, 80);
-        g2d.setColor(statusColor);
-        g2d.fillOval(x - CRANE_WIDTH/2 + 5, y - CRANE_HEIGHT + 5, 8, 8);
-    }
-
-    private void drawFloatingInfo(Graphics2D g2d) {
-        int x = getWidth() - 220;
-        int y = 20;
-
-        // Draw semi-transparent background
-        g2d.setColor(new Color(255, 255, 255, 230));
-        g2d.fillRoundRect(x, y, 200, 200, 10, 10);
-        g2d.setColor(Color.DARK_GRAY);
-        g2d.setStroke(new BasicStroke(2.0f));
-        g2d.drawRoundRect(x, y, 200, 200, 10, 10);
-
-        // Draw system info
-        g2d.setColor(Color.BLACK);
-        g2d.setFont(new Font("Segoe UI", Font.BOLD, 11));
-        g2d.drawString("System Status", x + 10, y + 20);
-
-        g2d.setFont(new Font("Monospaced", Font.PLAIN, 10));
-        int lineY = y + 40;
-        int lineHeight = 18;
-
-        // Total valves in system
-        int totalInSystem = engine.getTotalValvesInSystem();
-        g2d.drawString(String.format("In System: %d", totalInSystem),
-            x + 10, lineY);
-        lineY += lineHeight;
-
-        // Completed valves
-        int completed = engine.getCompletedValves().size();
-        g2d.drawString(String.format("Completed: %d", completed),
-            x + 10, lineY);
-        lineY += lineHeight;
-
-        // Completion rate
-        int total = engine.getAllValves().size();
-        double compRate = total > 0 ? (completed * 100.0 / total) : 0;
-        g2d.drawString(String.format("Rate: %.1f%%", compRate),
-            x + 10, lineY);
-        lineY += lineHeight;
-
-        lineY += 10;
-
-        // Crane info
-        Crane crane = engine.getCrane();
-        g2d.drawString(String.format("Crane Trips: %d", crane.getTotalTrips()),
-            x + 10, lineY);
-        lineY += lineHeight;
-
-        double craneUtil = crane.getUtilization(engine.getCurrentTime());
-        g2d.drawString(String.format("Crane Util: %.1f%%", craneUtil),
-            x + 10, lineY);
-        lineY += lineHeight;
-
-        lineY += 10;
-
-        // Bottleneck indicator
-        String bottleneck = findBottleneck();
-        g2d.setFont(new Font("Segoe UI", Font.BOLD, 10));
-        g2d.setColor(new Color(244, 67, 54));
-        g2d.drawString("Bottleneck:", x + 10, lineY);
-        g2d.setFont(new Font("Monospaced", Font.PLAIN, 10));
-        g2d.drawString(bottleneck, x + 10, lineY + lineHeight);
-    }
-
-    private String findBottleneck() {
-        double maxUtil = 0;
-        String bottleneck = "None";
-        double currentTime = engine.getCurrentTime();
-
-        for (Location loc : engine.getLocations().values()) {
-            if (loc.getName().startsWith("M")) {
-                double util = loc.getUtilization(currentTime);
-                if (util > maxUtil) {
-                    maxUtil = util;
-                    bottleneck = loc.getName();
-                }
+        g2d.setStroke(new BasicStroke(3.5f,
+            BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0,
+            new float[]{12, 6}, 0));
+        g2d.setColor(new Color(70, 130, 220, 120));
+
+        for (PathNetwork.PathEdge edge : network.getEdges()) {
+            Point from = network.getNodePosition(edge.getFrom());
+            Point to = network.getNodePosition(edge.getTo());
+            if (from != null && to != null) {
+                g2d.drawLine(from.x, from.y, to.x, to.y);
             }
         }
 
-        return String.format("%s (%.0f%%)", bottleneck, maxUtil);
+        // Highlight current crane path
+        List<Point> pathPoints = engine.getCrane().getCurrentPathPoints();
+        if (pathPoints.size() >= 2) {
+            g2d.setColor(new Color(255, 140, 0, 190));
+            g2d.setStroke(new BasicStroke(5.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            for (int i = 0; i < pathPoints.size() - 1; i++) {
+                Point from = pathPoints.get(i);
+                Point to = pathPoints.get(i + 1);
+                g2d.drawLine(from.x, from.y, to.x, to.y);
+            }
+        }
+
+        // Draw nodes
+        g2d.setStroke(new BasicStroke(1.5f));
+        for (Map.Entry<String, Point> entry : network.getNodePositions().entrySet()) {
+            Point node = entry.getValue();
+            g2d.setColor(new Color(35, 73, 147));
+            g2d.fillOval(node.x - 6, node.y - 6, 12, 12);
+            g2d.setColor(Color.WHITE);
+            g2d.drawOval(node.x - 6, node.y - 6, 12, 12);
+        }
+    }
+
+    private void drawLocation(Graphics2D g2d, String name) {
+        Location loc = engine.getLocations().get(name);
+        if (loc == null) return;
+
+        Point pos = locationPositions.get(name);
+        if (pos == null) return;
+
+        int w = 140, h = 110;
+        int x = pos.x - w/2;
+        int y = pos.y - h/2;
+
+        // Determine colors
+        Color bgColor, borderColor;
+        if (name.equals("DOCK")) {
+            bgColor = new Color(135, 206, 250, 220);
+            borderColor = new Color(70, 130, 200);
+        } else if (name.equals("STOCK")) {
+            bgColor = new Color(144, 238, 144, 220);
+            borderColor = new Color(70, 180, 70);
+        } else if (name.startsWith("Almacen")) {
+            bgColor = new Color(255, 248, 220, 220);
+            borderColor = new Color(218, 165, 32);
+        } else {
+            bgColor = new Color(200, 200, 220, 220);
+            borderColor = new Color(100, 100, 130);
+        }
+
+        // Shadow
+        g2d.setColor(new Color(0, 0, 0, 40));
+        g2d.fillRoundRect(x + 4, y + 4, w, h, 12, 12);
+
+        // Background
+        g2d.setColor(bgColor);
+        g2d.fillRoundRect(x, y, w, h, 12, 12);
+
+        // Border
+        g2d.setColor(borderColor);
+        g2d.setStroke(new BasicStroke(3.0f));
+        g2d.drawRoundRect(x, y, w, h, 12, 12);
+
+        // Draw icon based on type
+        if (name.equals("DOCK") || name.equals("STOCK")) {
+            drawPalletIcon(g2d, x + w/2, y + 40, name.equals("STOCK"));
+        } else if (name.startsWith("Almacen")) {
+            drawStorageIcon(g2d, x + w/2, y + 40);
+        } else {
+            drawMachineIcon(g2d, x + w/2, y + 45, loc.getProcessingSize() > 0);
+        }
+
+        // Label
+        g2d.setColor(Color.BLACK);
+        g2d.setFont(new Font("Arial", Font.BOLD, 12));
+        g2d.drawString(Localization.getLocationDisplayName(name), x + 8, y + 18);
+
+        // Capacity
+        String cap = String.format("%d/%s", loc.getCurrentContents(),
+            loc.getCapacity() == Integer.MAX_VALUE ? "∞" : String.valueOf(loc.getCapacity()));
+        g2d.setFont(new Font("Arial", Font.PLAIN, 11));
+        g2d.drawString(cap, x + 8, y + 33);
+
+        if (name.startsWith("M")) {
+            drawMachineUnitInfo(g2d, x, y, w, h, loc);
+        }
+
+        // Draw valves
+        List<Valve> valves = loc.getAllValves();
+        if (!valves.isEmpty()) {
+            int count = Math.min(10, valves.size());
+            for (int i = 0; i < count; i++) {
+                Valve v = valves.get(i);
+                int vx = x + 10 + (i % 5) * 24;
+                int vy = y + h - 28 + (i / 5) * 16;
+                drawValve(g2d, v, vx, vy);
+            }
+            if (valves.size() > 10) {
+                g2d.setColor(Color.BLACK);
+                g2d.setFont(new Font("Arial", Font.BOLD, 9));
+                g2d.drawString("+" + (valves.size() - 10), x + w - 25, y + h - 10);
+            }
+        }
+    }
+
+    private void drawPalletIcon(Graphics2D g2d, int cx, int cy, boolean isStock) {
+        g2d.setColor(new Color(139, 90, 43));
+        if (isStock) {
+            for (int layer = 0; layer < 4; layer++) {
+                int yOff = cy - 5 + layer * 8;
+                g2d.fillRect(cx - 30, yOff, 60, 6);
+                g2d.fillRect(cx - 30, yOff + 7, 60, 6);
+            }
+        } else {
+            for (int i = 0; i < 5; i++) {
+                g2d.fillRect(cx - 30, cy + i * 8, 60, 6);
+            }
+        }
+    }
+
+    private void drawStorageIcon(Graphics2D g2d, int cx, int cy) {
+        g2d.setColor(new Color(218, 165, 32));
+        g2d.setStroke(new BasicStroke(2.5f));
+        g2d.drawRect(cx - 25, cy - 20, 50, 40);
+        g2d.drawLine(cx - 25, cy - 5, cx + 25, cy - 5);
+        g2d.drawLine(cx - 25, cy + 10, cx + 25, cy + 10);
+    }
+
+    private void drawMachineIcon(Graphics2D g2d, int cx, int cy, boolean isActive) {
+        g2d.setColor(new Color(160, 160, 180));
+        g2d.fillRoundRect(cx - 30, cy - 20, 60, 40, 8, 8);
+        g2d.setColor(new Color(90, 90, 110));
+        g2d.fillRect(cx + 10, cy - 15, 15, 15);
+        g2d.setColor(new Color(50, 50, 70));
+        g2d.fillRect(cx - 20, cy - 10, 25, 25);
+
+        if (isActive) {
+            g2d.setColor(new Color(76, 175, 80));
+            g2d.fillOval(cx + 15, cy - 25, 10, 10);
+        }
+    }
+
+    private void drawMachineUnitInfo(Graphics2D g2d, int x, int y, int w, int h, Location loc) {
+        int badgeWidth = 54;
+        int badgeHeight = 20;
+        int badgeX = x + w - badgeWidth - 10;
+        int badgeY = y + 6;
+
+        g2d.setColor(new Color(255, 255, 255, 230));
+        g2d.fillRoundRect(badgeX, badgeY, badgeWidth, badgeHeight, 10, 10);
+        g2d.setColor(new Color(70, 70, 110));
+        g2d.setStroke(new BasicStroke(1.4f));
+        g2d.drawRoundRect(badgeX, badgeY, badgeWidth, badgeHeight, 10, 10);
+
+        g2d.setFont(new Font("Arial", Font.BOLD, 11));
+        String unitsText = loc.getUnits() + "×";
+        g2d.drawString(unitsText, badgeX + 12, badgeY + 14);
+
+        g2d.setColor(new Color(60, 60, 90));
+        g2d.setFont(new Font("Arial", Font.PLAIN, 10));
+        int infoY = y + h - 40;
+        g2d.drawString(String.format("Activas: %d/%d",
+            loc.getProcessingSize(), loc.getUnits()), x + 8, infoY);
+    }
+
+    private void drawValve(Graphics2D g2d, Valve v, int x, int y) {
+        Color c = v.getType().getColor();
+        g2d.setColor(new Color(0, 0, 0, 60));
+        g2d.fillOval(x + 1, y + 1, 14, 14);
+        g2d.setColor(c);
+        g2d.fillOval(x, y, 14, 14);
+        g2d.setColor(c.darker());
+        g2d.setStroke(new BasicStroke(1.5f));
+        g2d.drawOval(x, y, 14, 14);
+    }
+
+    private void drawCrane(Graphics2D g2d) {
+        Crane crane = engine.getCrane();
+        Point cranePos = crane.getInterpolatedPosition();
+
+        int x = cranePos.x;
+        int y = cranePos.y - 70;
+
+        // Forklift body
+        g2d.setColor(new Color(255, 165, 0));
+        g2d.fillRoundRect(x - 22, y, 44, 35, 8, 8);
+
+        // Cabin
+        g2d.setColor(new Color(255, 200, 0));
+        g2d.fillRect(x - 15, y + 5, 30, 22);
+
+        // Window
+        g2d.setColor(new Color(135, 206, 250));
+        g2d.fillRect(x - 10, y + 8, 20, 14);
+
+        // Forks
+        g2d.setColor(new Color(100, 100, 100));
+        g2d.setStroke(new BasicStroke(4.0f));
+        g2d.drawLine(x - 15, y + 35, x - 15, y + 50);
+        g2d.drawLine(x - 5, y + 35, x - 5, y + 50);
+        g2d.drawLine(x + 5, y + 35, x + 5, y + 50);
+        g2d.drawLine(x + 15, y + 35, x + 15, y + 50);
+
+        // Wheels
+        g2d.setColor(Color.BLACK);
+        g2d.fillOval(x - 20, y + 32, 14, 14);
+        g2d.fillOval(x + 6, y + 32, 14, 14);
+
+        // Status light
+        Color status = crane.isBusy() ? new Color(255, 69, 0) : new Color(76, 175, 80);
+        g2d.setColor(status);
+        g2d.fillOval(x - 6, y - 8, 12, 12);
+
+        // Carrying valve
+        Valve carrying = crane.getCarryingValve();
+        if (carrying != null) {
+            drawValve(g2d, carrying, x - 7, y + 52);
+        }
+
+        // Label
+        g2d.setColor(Color.BLACK);
+        g2d.setFont(new Font("Arial", Font.BOLD, 10));
+        String label = crane.isBusy() ? "OCUPADA" : "LIBRE";
+        FontMetrics fm = g2d.getFontMetrics();
+        g2d.drawString(label, x - fm.stringWidth(label)/2, y - 12);
+    }
+
+    private void drawInfo(Graphics2D g2d) {
+        g2d.setColor(new Color(255, 255, 255, 240));
+        g2d.fillRoundRect(20, 20, 240, 140, 12, 12);
+        g2d.setColor(new Color(100, 120, 180));
+        g2d.setStroke(new BasicStroke(2.5f));
+        g2d.drawRoundRect(20, 20, 240, 140, 12, 12);
+
+        g2d.setColor(Color.BLACK);
+        g2d.setFont(new Font("Arial", Font.BOLD, 13));
+        g2d.drawString("Estado del Sistema", 35, 42);
+
+        g2d.setFont(new Font("Monospaced", Font.PLAIN, 11));
+        g2d.drawString(String.format("Tiempo: %.1f hrs", engine.getCurrentTime()), 35, 62);
+        g2d.drawString("En Sistema: " + engine.getTotalValvesInSystem(), 35, 80);
+        g2d.drawString("Completadas: " + engine.getCompletedValves().size(), 35, 98);
+        g2d.drawString("Viajes Grua: " + engine.getCrane().getTotalTrips(), 35, 116);
+        g2d.drawString("Ruta Actual: " + engine.getCrane().getCurrentPathPoints().size(), 35, 134);
     }
 }

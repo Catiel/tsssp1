@@ -3,10 +3,10 @@ package gui;
 import core.SimulationEngine;
 import model.Valve;
 import statistics.*;
+import utils.Localization;
 import javax.swing.*;
 import javax.swing.table.*;
 import java.awt.*;
-import java.util.*;
 
 public class StatisticsPanel extends JPanel {
     private SimulationEngine engine;
@@ -31,9 +31,9 @@ public class StatisticsPanel extends JPanel {
 
     private void initializeComponents() {
         // Entity Statistics Table
-        String[] entityColumns = {"Valve Type", "Arrivals", "Completed", "In System",
-                                  "Completion %", "Avg Time (hrs)", "Avg Processing",
-                                  "Avg Movement", "Avg Waiting"};
+        String[] entityColumns = {"Tipo de Valvula", "Llegadas", "Completadas", "En Sistema",
+                      "% Completado", "Tiempo Prom (hrs)", "Proc Prom",
+                      "Mov Prom", "Espera Prom"};
         entityModel = new DefaultTableModel(entityColumns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -44,8 +44,8 @@ public class StatisticsPanel extends JPanel {
         styleTable(entityTable);
 
         // Location Statistics Table
-        String[] locationColumns = {"Location", "Capacity", "Current", "Max", "Avg Contents",
-                                   "Utilization %", "Total Entries", "Total Exits"};
+        String[] locationColumns = {"Ubicacion", "Cap", "Actual", "Max", "Contenido Prom",
+                       "% Util", "Entradas", "Salidas"};
         locationModel = new DefaultTableModel(locationColumns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -56,8 +56,8 @@ public class StatisticsPanel extends JPanel {
         styleTable(locationTable);
 
         // Resource Statistics Table
-        String[] resourceColumns = {"Resource", "Units", "Total Trips", "Total Travel Time",
-                                   "Current Utilization %", "Avg Utilization %"};
+        String[] resourceColumns = {"Recurso", "Unidades", "Viajes", "Tiempo de Viaje",
+                       "% Util Actual", "% Util Prom"};
         resourceModel = new DefaultTableModel(resourceColumns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -73,7 +73,7 @@ public class StatisticsPanel extends JPanel {
         summaryArea.setFont(new Font("Monospaced", Font.PLAIN, 11));
         summaryArea.setBackground(new Color(250, 250, 250));
         summaryArea.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createTitledBorder("Simulation Summary"),
+            BorderFactory.createTitledBorder("Resumen de la Simulacion"),
             BorderFactory.createEmptyBorder(5, 5, 5, 5)
         ));
     }
@@ -102,28 +102,28 @@ public class StatisticsPanel extends JPanel {
 
         // Entity tab
         JScrollPane entityScroll = new JScrollPane(entityTable);
-        entityScroll.setBorder(BorderFactory.createTitledBorder("Entity Statistics"));
-        tabbedPane.addTab("Entities", entityScroll);
+        entityScroll.setBorder(BorderFactory.createTitledBorder("Estadisticas de Entidades"));
+        tabbedPane.addTab("Entidades", entityScroll);
 
         // Location tab
         JScrollPane locationScroll = new JScrollPane(locationTable);
-        locationScroll.setBorder(BorderFactory.createTitledBorder("Location Statistics"));
-        tabbedPane.addTab("Locations", locationScroll);
+        locationScroll.setBorder(BorderFactory.createTitledBorder("Estadisticas de Ubicaciones"));
+        tabbedPane.addTab("Ubicaciones", locationScroll);
 
         // Resource tab
         JScrollPane resourceScroll = new JScrollPane(resourceTable);
-        resourceScroll.setBorder(BorderFactory.createTitledBorder("Resource Statistics"));
-        tabbedPane.addTab("Resources", resourceScroll);
+        resourceScroll.setBorder(BorderFactory.createTitledBorder("Estadisticas de Recursos"));
+        tabbedPane.addTab("Recursos", resourceScroll);
 
         // Summary tab
         JScrollPane summaryScroll = new JScrollPane(summaryArea);
-        tabbedPane.addTab("Summary", summaryScroll);
+        tabbedPane.addTab("Resumen", summaryScroll);
 
         add(tabbedPane, BorderLayout.CENTER);
 
         // Export button
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton exportButton = new JButton("📄 Export Report");
+        JButton exportButton = new JButton("📄 Exportar Reporte");
         exportButton.setFont(new Font("Segoe UI", Font.BOLD, 12));
         exportButton.addActionListener(e -> exportReport());
         buttonPanel.add(exportButton);
@@ -145,7 +145,7 @@ public class StatisticsPanel extends JPanel {
         for (Valve.Type type : Valve.Type.values()) {
             EntityStats es = stats.getEntityStats(type);
             entityModel.addRow(new Object[]{
-                type.name(),
+                type.getDisplayName(),
                 es.getTotalArrivals(),
                 es.getTotalCompleted(),
                 es.getCurrentInSystem(),
@@ -164,7 +164,7 @@ public class StatisticsPanel extends JPanel {
 
         for (model.Location loc : engine.getLocations().values()) {
             locationModel.addRow(new Object[]{
-                loc.getName(),
+                Localization.getLocationDisplayName(loc.getName()),
                 loc.getCapacity() == Integer.MAX_VALUE ? "∞" : loc.getCapacity(),
                 loc.getCurrentContents(),
                 (int)loc.getMaxContents(),
@@ -197,11 +197,11 @@ public class StatisticsPanel extends JPanel {
 
         // Add bottleneck analysis
         sb.append("\n┌─────────────────────────────────────────────────────────┐\n");
-        sb.append("│  BOTTLENECK ANALYSIS                                     │\n");
+        sb.append("│  ANALISIS DE CUELLOS DE BOTELLA                           │\n");
         sb.append("├─────────────────────────────────────────────────────────┤\n");
 
         double maxUtil = 0;
-        String bottleneck = "None";
+        String bottleneck = "Ninguno";
         double currentTime = engine.getCurrentTime();
 
         for (model.Location loc : engine.getLocations().values()) {
@@ -209,12 +209,12 @@ public class StatisticsPanel extends JPanel {
                 double util = loc.getUtilization(currentTime);
                 if (util > maxUtil) {
                     maxUtil = util;
-                    bottleneck = loc.getName();
+                    bottleneck = Localization.getLocationDisplayName(loc.getName());
                 }
             }
         }
 
-        sb.append(String.format("Primary Bottleneck: %s (%.1f%% utilization)\n",
+        sb.append(String.format("Cuello Principal: %s (%.1f%% de utilizacion)\n",
             bottleneck, maxUtil));
 
         summaryArea.setText(sb.toString());
@@ -223,8 +223,8 @@ public class StatisticsPanel extends JPanel {
 
     private void exportReport() {
         JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("Export Simulation Report");
-        fileChooser.setSelectedFile(new java.io.File("simulation_report.txt"));
+        fileChooser.setDialogTitle("Exportar Reporte de Simulacion");
+        fileChooser.setSelectedFile(new java.io.File("reporte_simulacion.txt"));
 
         int userSelection = fileChooser.showSaveDialog(this);
         if (userSelection == JFileChooser.APPROVE_OPTION) {
@@ -233,13 +233,13 @@ public class StatisticsPanel extends JPanel {
                 java.nio.file.Files.write(fileToSave.toPath(),
                     summaryArea.getText().getBytes());
                 JOptionPane.showMessageDialog(this,
-                    "Report exported successfully!",
-                    "Export Complete",
+                    "Reporte exportado exitosamente!",
+                    "Exportacion Completa",
                     JOptionPane.INFORMATION_MESSAGE);
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this,
-                    "Error exporting report: " + ex.getMessage(),
-                    "Export Error",
+                    "Error al exportar el reporte: " + ex.getMessage(),
+                    "Error de Exportacion",
                     JOptionPane.ERROR_MESSAGE);
             }
         }

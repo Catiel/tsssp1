@@ -6,6 +6,7 @@ import java.awt.Point;
 import java.util.*;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class SimulationEngine {
     // Core simulation components
@@ -20,6 +21,8 @@ public class SimulationEngine {
     private Crane crane;
     private PathNetwork pathNetwork;
     private ShiftCalendar shiftCalendar;
+    private final Set<String> pendingMachineWakeups;
+    private final Queue<Valve> pendingCraneTransfers;
 
     // Statistics
     private Statistics statistics;
@@ -40,6 +43,8 @@ public class SimulationEngine {
         this.locations = new ConcurrentHashMap<>();
         this.pathNetwork = new PathNetwork();
         this.shiftCalendar = new ShiftCalendar();
+        this.pendingMachineWakeups = ConcurrentHashMap.newKeySet();
+        this.pendingCraneTransfers = new ConcurrentLinkedQueue<>();
         this.statistics = new Statistics();
         this.allValves = Collections.synchronizedList(new ArrayList<>());
         this.completedValves = Collections.synchronizedList(new ArrayList<>());
@@ -53,24 +58,38 @@ public class SimulationEngine {
     private void initializeLocations() {
         // Create locations with exact ProModel specifications
         locations.put("DOCK", new Location("DOCK", Integer.MAX_VALUE, 1,
-            new Point(50, 100)));
+            new Point(190, 140)));
         locations.put("STOCK", new Location("STOCK", Integer.MAX_VALUE, 1,
-            new Point(150, 100)));
+            new Point(200, 420)));
 
         locations.put("Almacen_M1", new Location("Almacen_M1", 20, 1,
-            new Point(300, 100)));
-        locations.put("M1", new Location("M1", 1, 1,
-            new Point(300, 100)));
+            new Point(560, 520)));
+        // M1 parent with capacity 1 and 10 units (routing target)
+        locations.put("M1", new Location("M1", 1, 10,
+            new Point(560, 380)));
+        // Individual M1 units
+        for (int i = 1; i <= 10; i++) {
+            locations.put("M1." + i, new Location("M1." + i, 1, 1,
+                new Point(560, 380)));
+        }
 
         locations.put("Almacen_M2", new Location("Almacen_M2", 20, 1,
-            new Point(500, 100)));
-        locations.put("M2", new Location("M2", 1, 1,
-            new Point(500, 100)));
+            new Point(960, 320)));
+        locations.put("M2", new Location("M2", 1, 25,
+            new Point(760, 300)));
+        for (int i = 1; i <= 25; i++) {
+            locations.put("M2." + i, new Location("M2." + i, 1, 1,
+                new Point(760, 300)));
+        }
 
         locations.put("Almacen_M3", new Location("Almacen_M3", 30, 1,
-            new Point(650, 50)));
-        locations.put("M3", new Location("M3", 1, 1,
-            new Point(650, 50)));
+            new Point(1080, 180)));
+        locations.put("M3", new Location("M3", 1, 17,
+            new Point(900, 160)));
+        for (int i = 1; i <= 17; i++) {
+            locations.put("M3." + i, new Location("M3." + i, 1, 1,
+                new Point(900, 160)));
+        }
     }
 
     private void initializeCrane() {
@@ -93,10 +112,16 @@ public class SimulationEngine {
     }
 
     private void scheduleValveArrivals(Valve.Type type, int quantity, double time) {
+        // Adjust arrival time to next working shift if outside working hours
+        double arrivalTime = time;
+        if (!shiftCalendar.isWorkingTime(arrivalTime)) {
+            arrivalTime = shiftCalendar.getNextWorkingTime(arrivalTime);
+        }
+        
         for (int i = 0; i < quantity; i++) {
-            Valve valve = new Valve(type, time);
+            Valve valve = new Valve(type, arrivalTime);
             allValves.add(valve);
-            eventQueue.add(new Event(Event.Type.ARRIVAL, time, valve, null));
+            eventQueue.add(new Event(Event.Type.ARRIVAL, arrivalTime, valve, null));
         }
     }
 
@@ -141,6 +166,9 @@ public class SimulationEngine {
 
     private void processEvent(Event event) {
         switch (event.getType()) {
+            case SAMPLE_STATISTICS:
+                sampleStatistics();
+                break;
             case ARRIVAL:
                 handleArrival(event.getValve());
                 break;
@@ -153,8 +181,12 @@ public class SimulationEngine {
             case END_CRANE_MOVE:
                 handleEndCraneMove(event.getValve(), (String) event.getData());
                 break;
-            case SAMPLE_STATISTICS:
-                sampleStatistics();
+            case SHIFT_START:
+                handleShiftStart((String) event.getData());
+                break;
+            case CRANE_PICKUP:
+            case CRANE_RELEASE:
+            case SHIFT_END:
                 break;
         }
     }
@@ -165,54 +197,136 @@ public class SimulationEngine {
         valve.setState(Valve.State.IN_QUEUE);
         statistics.recordArrival(valve);
 
-        // Try to schedule crane movement
+        // Try to schedule crane movement (respects shift calendar)
         tryScheduleCraneMove();
+
+        // If crane didn't start (outside shift), schedule wakeup
+        if (!crane.isBusy() && !shiftCalendar.isWorkingTime(currentTime) && dock.getQueueSize() > 0) {
+            scheduleCraneWakeup();
+        }
     }
 
     private void handleEndProcessing(Valve valve) {
-        Location machine = valve.getCurrentLocation();
+        Location machineUnit = valve.getCurrentLocation();
         valve.endProcessing(currentTime);
+        valve.advanceStep();
 
-        // Move from machine to its storage
-        String almacenName = machine.getName().replace("M", "Almacen_M");
+        machineUnit.removeValve(valve);
+
+        // Machine unit holds the valve temporarily; crane will pick it up
+        valve.setCurrentLocation(machineUnit);
+        valve.startWaiting(currentTime);
+        pendingCraneTransfers.add(valve);
+
+        // Free machine capacity for next valve
+        String unitName = machineUnit.getName();
+        String machineBaseName = unitName.contains(".") ? unitName.substring(0, unitName.indexOf(".")) : unitName;
+        String almacenName = "Almacen_" + machineBaseName;
         Location almacen = locations.get(almacenName);
+        Location machineParent = locations.get(machineBaseName);
+        if (almacen != null && machineParent != null) {
+            checkMachineQueue(machineParent, almacen);
+        }
 
-        machine.removeValve(valve);
+        tryScheduleCraneMove();
+    }
 
-        if (almacen.canAccept()) {
-            almacen.addToQueue(valve);
-            valve.advanceStep();
+    private void checkMachineQueue(Location machineParent, Location almacen) {
+        String machineBaseName = machineParent.getName();
+        int unitCount = machineParent.getUnits();
 
-            // Check if there's another valve waiting for this machine
-            checkMachineQueue(machine, almacen);
+        while (almacen.getQueueSize() > 0) {
+            if (!shiftCalendar.isWorkingTime(currentTime)) {
+                Valve waitingValve = almacen.peekQueue();
+                if (waitingValve != null) {
+                    waitingValve.startWaiting(currentTime);
+                }
+                scheduleMachineWakeup(machineBaseName);
+                break;
+            }
 
-            // Try to schedule crane for this valve
-            tryScheduleCraneMove();
-        } else {
-            // Blocked - valve stays in machine
-            valve.startBlocked(currentTime);
+            // Find first available unit
+            Location availableUnit = null;
+            for (int i = 1; i <= unitCount; i++) {
+                Location unit = locations.get(machineBaseName + "." + i);
+                if (unit != null && unit.hasAvailableUnit()) {
+                    availableUnit = unit;
+                    break;
+                }
+            }
+
+            if (availableUnit == null) {
+                break;
+            }
+
+            Valve nextValve = almacen.peekQueue();
+            if (nextValve == null) {
+                break;
+            }
+
+            almacen.removeValve(nextValve);
+            availableUnit.addToQueue(nextValve);
+            availableUnit.moveToProcessing(nextValve);
+
+            double processTime = nextValve.getCurrentProcessingTime();
+            nextValve.startProcessing(currentTime);
+
+            eventQueue.add(new Event(Event.Type.END_PROCESSING,
+                currentTime + processTime, nextValve, null));
         }
     }
 
-    private void checkMachineQueue(Location machine, Location almacen) {
-        if (machine.hasAvailableUnit() && almacen.getQueueSize() > 0) {
-            Valve nextValve = almacen.peekQueue();
-            if (nextValve != null && shiftCalendar.isWorkingTime(currentTime)) {
-                almacen.removeValve(nextValve);
-                machine.addToQueue(nextValve);
-                machine.moveToProcessing(nextValve);
-
-                double processTime = nextValve.getCurrentProcessingTime();
-                nextValve.startProcessing(currentTime);
-
-                eventQueue.add(new Event(Event.Type.END_PROCESSING,
-                    currentTime + processTime, nextValve, null));
-            }
+    private void scheduleMachineWakeup(String machineName) {
+        if (!pendingMachineWakeups.add(machineName)) {
+            return;
         }
+        double wakeTime = shiftCalendar.getNextWorkingTime(currentTime);
+        if (wakeTime <= currentTime) {
+            pendingMachineWakeups.remove(machineName);
+            return;
+        }
+        eventQueue.add(new Event(Event.Type.SHIFT_START, wakeTime, null, machineName));
+    }
+
+    private void scheduleCraneWakeup() {
+        double wakeTime = shiftCalendar.getNextWorkingTime(currentTime);
+        if (wakeTime > currentTime) {
+            eventQueue.add(new Event(Event.Type.SHIFT_START, wakeTime, null, "CRANE"));
+        }
+    }
+
+    private void handleShiftStart(String machineName) {
+        if (machineName == null) {
+            return;
+        }
+
+        // Special case: crane wakeup
+        if ("CRANE".equals(machineName)) {
+            tryScheduleCraneMove();
+            return;
+        }
+
+        pendingMachineWakeups.remove(machineName);
+        Location machineParent = locations.get(machineName);
+        if (machineParent == null) {
+            return;
+        }
+        String almacenName = "Almacen_" + machineName;
+        Location almacen = locations.get(almacenName);
+        if (almacen == null) {
+            return;
+        }
+        checkMachineQueue(machineParent, almacen);
+        tryScheduleCraneMove();
     }
 
     private void tryScheduleCraneMove() {
         if (crane.isBusy()) {
+            return;
+        }
+
+        // Crane only works during shifts
+        if (!shiftCalendar.isWorkingTime(currentTime)) {
             return;
         }
 
@@ -230,19 +344,19 @@ public class SimulationEngine {
     }
 
     private Valve findValveNeedingTransport() {
-        // Priority: DOCK > Almacenes > others
-        Location dock = locations.get("DOCK");
-        if (dock.getQueueSize() > 0) {
-            return dock.peekQueue();
+        Valve machineValve = pollPendingCraneTransfer();
+        if (machineValve != null) {
+            return machineValve;
         }
 
-        for (String almacenName : Arrays.asList("Almacen_M1", "Almacen_M2", "Almacen_M3")) {
-            Location almacen = locations.get(almacenName);
-            if (almacen.getQueueSize() > 0) {
-                Valve valve = almacen.peekQueue();
-                String nextDest = getNextDestination(valve);
-                if (nextDest != null && locations.get(nextDest).canAccept()) {
-                    return valve;
+        Location dock = locations.get("DOCK");
+        if (dock != null && dock.getQueueSize() > 0) {
+            Valve candidate = dock.peekQueue();
+            if (candidate != null) {
+                String destination = getNextDestination(candidate);
+                Location destLoc = destination != null ? locations.get(destination) : null;
+                if (destLoc != null && destLoc.canAccept()) {
+                    return candidate;
                 }
             }
         }
@@ -250,8 +364,31 @@ public class SimulationEngine {
         return null;
     }
 
+    private Valve pollPendingCraneTransfer() {
+        Iterator<Valve> iterator = pendingCraneTransfers.iterator();
+        while (iterator.hasNext()) {
+            Valve valve = iterator.next();
+            String destination = getNextDestination(valve);
+            if (destination == null) {
+                iterator.remove();
+                continue;
+            }
+            Location destLoc = locations.get(destination);
+            if (destLoc != null && destLoc.canAccept()) {
+                iterator.remove();
+                return valve;
+            }
+        }
+        return null;
+    }
+
     private String getNextDestination(Valve valve) {
-        if (valve.getCurrentLocation().getName().equals("DOCK")) {
+        Location currentLocation = valve.getCurrentLocation();
+        if (currentLocation == null) {
+            return null;
+        }
+
+        if (currentLocation.getName().equals("DOCK")) {
             return valve.getNextAlmacen();
         }
 
@@ -268,18 +405,41 @@ public class SimulationEngine {
         Location from = valve.getCurrentLocation();
         Location to = locations.get(destination);
 
-        double travelTime = crane.calculateTravelTime(from.getPosition(), to.getPosition());
+        if (from == null || to == null) {
+            crane.setBusy(false);
+            return;
+        }
+
+        PathNetwork.PathResult pathResult = pathNetwork.getPathForLocations(from.getName(), destination);
+        List<Point> pathPoints;
+        List<Double> segmentDistances;
+        double totalDistanceMeters;
+
+        if (pathResult.isValid() && pathResult.getPoints().size() >= 2) {
+            pathPoints = pathResult.getPoints();
+            segmentDistances = pathResult.getSegmentDistances();
+            totalDistanceMeters = pathResult.getTotalDistance();
+        } else {
+            Point start = new Point(from.getPosition());
+            Point end = new Point(to.getPosition());
+            pathPoints = Arrays.asList(start, end);
+            double euclidean = start.distance(end);
+            segmentDistances = Collections.singletonList(euclidean);
+            totalDistanceMeters = euclidean;
+        }
+
+        double travelTime = crane.calculateTravelTime(totalDistanceMeters, valve != null);
 
         crane.addTravelTime(travelTime);
         valve.addMovementTime(travelTime);
         valve.endWaiting(currentTime);
 
+        crane.startMove(pathPoints, segmentDistances, totalDistanceMeters, travelTime);
+
         eventQueue.add(new Event(Event.Type.START_CRANE_MOVE,
             currentTime, valve, destination));
         eventQueue.add(new Event(Event.Type.END_CRANE_MOVE,
             currentTime + travelTime, valve, destination));
-
-        crane.startMove(to.getPosition());
     }
 
     private void handleStartCraneMove(Valve valve, String destination) {
@@ -302,30 +462,28 @@ public class SimulationEngine {
             completedValves.add(valve);
             statistics.recordCompletion(valve, currentTime);
         } else if (destination.startsWith("Almacen")) {
+            // Crane drops valve at storage
             destLoc.addToQueue(valve);
             valve.setState(Valve.State.IN_QUEUE);
 
-            // Try to move to machine immediately
+            // Immediately try to move to machine (ProModel: Almacen_M1 -> M1 is instant)
             String machineName = destination.replace("Almacen_", "");
-            Location machine = locations.get(machineName);
-
-            if (machine.hasAvailableUnit() && shiftCalendar.isWorkingTime(currentTime)) {
-                destLoc.removeValve(valve);
-                machine.addToQueue(valve);
-                machine.moveToProcessing(valve);
-
-                double processTime = valve.getCurrentProcessingTime();
-                valve.startProcessing(currentTime);
-
-                eventQueue.add(new Event(Event.Type.END_PROCESSING,
-                    currentTime + processTime, valve, null));
-            } else {
-                valve.startWaiting(currentTime);
+            Location machineParent = locations.get(machineName);
+            if (machineParent != null) {
+                checkMachineQueue(machineParent, destLoc);
             }
         }
 
-        // Schedule next crane move
+        // Try next crane move (respects shifts)
         tryScheduleCraneMove();
+
+        // If crane can't move (shift ended), schedule wakeup
+        if (!crane.isBusy() && !shiftCalendar.isWorkingTime(currentTime)) {
+            if (!pendingCraneTransfers.isEmpty() || 
+                locations.get("DOCK").getQueueSize() > 0) {
+                scheduleCraneWakeup();
+            }
+        }
     }
 
     private void sampleStatistics() {
@@ -377,4 +535,5 @@ public class SimulationEngine {
     public int getTotalValvesInSystem() {
         return allValves.size() - completedValves.size();
     }
+    public PathNetwork getPathNetwork() { return pathNetwork; }
 }

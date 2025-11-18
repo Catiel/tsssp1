@@ -1,17 +1,28 @@
 package gui;
 
 import core.SimulationEngine;
+import model.*;
+import statistics.*;
+import utils.Localization;
 import javax.swing.*;
+import javax.swing.table.*;
 import java.awt.*;
+import java.util.*;
 
 public class SimulationPanel extends JPanel {
     private SimulationEngine engine;
     private AnimationPanel animationPanel;
-    private JPanel infoPanel;
+    private JPanel statsPanel;
+    private JTable entityStatsTable;
+    private JTable locationStatsTable;
+    private JTable craneStatsTable;
+    private DefaultTableModel entityModel;
+    private DefaultTableModel locationModel;
+    private DefaultTableModel craneModel;
 
     public SimulationPanel(SimulationEngine engine) {
         this.engine = engine;
-        setLayout(new BorderLayout(5, 5));
+        setLayout(new BorderLayout(10, 10));
 
         initializeComponents();
         layoutComponents();
@@ -19,59 +30,177 @@ public class SimulationPanel extends JPanel {
 
     private void initializeComponents() {
         animationPanel = new AnimationPanel(engine);
-        infoPanel = createInfoPanel();
+        statsPanel = createStatsPanel();
     }
 
     private void layoutComponents() {
-        add(animationPanel, BorderLayout.CENTER);
-        add(infoPanel, BorderLayout.EAST);
+        // Left: Animation
+        JPanel animationContainer = new JPanel(new BorderLayout());
+        animationContainer.setBorder(BorderFactory.createTitledBorder("Animacion del Sistema"));
+        animationContainer.add(animationPanel, BorderLayout.CENTER);
+        animationContainer.add(createLegendPanel(), BorderLayout.SOUTH);
+
+        // Right: Statistics
+        JScrollPane statsScroll = new JScrollPane(statsPanel);
+        statsScroll.setBorder(BorderFactory.createTitledBorder("Estadisticas en Tiempo Real"));
+        statsScroll.setPreferredSize(new Dimension(400, 600));
+
+        // Layout
+        add(animationContainer, BorderLayout.CENTER);
+        add(statsScroll, BorderLayout.EAST);
     }
 
-    private JPanel createInfoPanel() {
+    private JPanel createStatsPanel() {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setPreferredSize(new Dimension(250, 0));
-        panel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createTitledBorder("System Status"),
-            BorderFactory.createEmptyBorder(5, 5, 5, 5)
-        ));
+        panel.setBackground(Color.WHITE);
 
-        // Add legend and info components
-        panel.add(createLegendPanel());
+        // Entity Statistics Table
+        String[] entityColumns = {"Valvula", "Llegadas", "Completadas", "En Sistema", "Tasa %"};
+        entityModel = new DefaultTableModel(entityColumns, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) { return false; }
+        };
+        entityStatsTable = createStyledTable(entityModel);
+        panel.add(createTableSection("Estadisticas de Valvulas", entityStatsTable, 150));
+
         panel.add(Box.createVerticalStrut(10));
-        panel.add(createQuickStatsPanel());
+
+        // Location Statistics Table
+        String[] locationColumns = {"Ubicacion", "Actual", "Capacidad", "Util %"};
+        locationModel = new DefaultTableModel(locationColumns, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) { return false; }
+        };
+        locationStatsTable = createStyledTable(locationModel);
+        panel.add(createTableSection("Estadisticas de Ubicaciones", locationStatsTable, 250));
+
+        panel.add(Box.createVerticalStrut(10));
+
+        // Crane Statistics Table
+        String[] craneColumns = {"Metrica", "Valor"};
+        craneModel = new DefaultTableModel(craneColumns, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) { return false; }
+        };
+        craneStatsTable = createStyledTable(craneModel);
+        panel.add(createTableSection("Estadisticas de la Grua", craneStatsTable, 120));
 
         return panel;
     }
 
-    private JPanel createLegendPanel() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new GridLayout(0, 1, 5, 5));
-        panel.setBorder(BorderFactory.createTitledBorder("Legend"));
+    private JTable createStyledTable(DefaultTableModel model) {
+        JTable table = new JTable(model);
+        table.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        table.setRowHeight(22);
+        table.setGridColor(new Color(220, 220, 220));
+        table.setSelectionBackground(new Color(184, 207, 229));
 
-        for (model.Valve.Type type : model.Valve.Type.values()) {
-            JPanel item = new JPanel(new FlowLayout(FlowLayout.LEFT));
-            JLabel colorBox = new JLabel("  ██  ");
+        JTableHeader header = table.getTableHeader();
+        header.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        header.setBackground(new Color(70, 130, 180));
+        header.setForeground(Color.WHITE);
+
+        DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
+        centerRenderer.setHorizontalAlignment(JLabel.CENTER);
+        for (int i = 1; i < table.getColumnCount(); i++) {
+            table.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
+        }
+
+        return table;
+    }
+
+    private JPanel createTableSection(String title, JTable table, int height) {
+        JPanel section = new JPanel(new BorderLayout());
+        section.setMaximumSize(new Dimension(Integer.MAX_VALUE, height));
+        section.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createTitledBorder(title),
+            BorderFactory.createEmptyBorder(5, 5, 5, 5)
+        ));
+
+        JScrollPane scrollPane = new JScrollPane(table);
+        scrollPane.setPreferredSize(new Dimension(380, height - 40));
+        section.add(scrollPane, BorderLayout.CENTER);
+
+        return section;
+    }
+
+    private JPanel createLegendPanel() {
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 5));
+        panel.setBackground(new Color(245, 245, 250));
+
+        for (Valve.Type type : Valve.Type.values()) {
+            JPanel item = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
+            item.setBackground(new Color(245, 245, 250));
+
+            JLabel colorBox = new JLabel("██");
             colorBox.setForeground(type.getColor());
-            colorBox.setFont(new Font("Monospaced", Font.BOLD, 12));
+            colorBox.setFont(new Font("Monospaced", Font.BOLD, 14));
+
+            JLabel label = new JLabel(type.getDisplayName());
+            label.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+
             item.add(colorBox);
-            item.add(new JLabel(type.name()));
+            item.add(label);
             panel.add(item);
         }
 
         return panel;
     }
 
-    private JPanel createQuickStatsPanel() {
-        JPanel panel = new JPanel(new GridLayout(0, 1, 5, 5));
-        panel.setBorder(BorderFactory.createTitledBorder("Quick Stats"));
+    public void updateDisplay() {
+        // Update animation
+        animationPanel.repaint();
 
-        // These will be updated dynamically
-        return panel;
+        // Update statistics tables
+        updateEntityStats();
+        updateLocationStats();
+        updateCraneStats();
     }
 
-    public void updateDisplay() {
-        animationPanel.repaint();
-        infoPanel.repaint();
+    private void updateEntityStats() {
+        entityModel.setRowCount(0);
+        Statistics stats = engine.getStatistics();
+
+        for (Valve.Type type : Valve.Type.values()) {
+            EntityStats es = stats.getEntityStats(type);
+            if (es != null) {
+                entityModel.addRow(new Object[]{
+                    type.getDisplayName(),
+                    es.getTotalArrivals(),
+                    es.getTotalCompleted(),
+                    es.getCurrentInSystem(),
+                    String.format("%.1f%%", es.getCompletionRate())
+                });
+            }
+        }
+    }
+
+    private void updateLocationStats() {
+        locationModel.setRowCount(0);
+        double currentTime = engine.getCurrentTime();
+
+        for (Location loc : engine.getLocations().values()) {
+            String capacity = loc.getCapacity() == Integer.MAX_VALUE ? "∞" : String.valueOf(loc.getCapacity());
+            locationModel.addRow(new Object[]{
+                Localization.getLocationDisplayName(loc.getName()),
+                loc.getCurrentContents(),
+                capacity,
+                String.format("%.1f%%", loc.getUtilization(currentTime))
+            });
+        }
+    }
+
+    private void updateCraneStats() {
+        craneModel.setRowCount(0);
+        Crane crane = engine.getCrane();
+        double currentTime = engine.getCurrentTime();
+
+        craneModel.addRow(new Object[]{"Estado", crane.isBusy() ? "OCUPADA" : "LIBRE"});
+        craneModel.addRow(new Object[]{"Viajes Totales", crane.getTotalTrips()});
+        craneModel.addRow(new Object[]{"Tiempo de Viaje", String.format("%.2f hrs", crane.getTotalTravelTime())});
+        craneModel.addRow(new Object[]{"Utilizacion", String.format("%.1f%%", crane.getUtilization(currentTime))});
+        craneModel.addRow(new Object[]{"Transportando", crane.getCarryingValve() != null ?
+            crane.getCarryingValve().toString() : "Ninguno"});
     }
 }

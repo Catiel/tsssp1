@@ -5,19 +5,22 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class Valve {
     public enum Type {
-        VALVULA_1(Color.decode("#FF6B6B"), new int[][]{{1, 10}, {-1, 0}, {3, 5}}),
-        VALVULA_2(Color.decode("#4ECDC4"), new int[][]{{2, 12}, {3, 7}, {2, 2}}),
-        VALVULA_3(Color.decode("#95E1D3"), new int[][]{{1, 5}, {-1, 0}, {3, 10}}),
-        VALVULA_4(Color.decode("#F38181"), new int[][]{{1, 2}, {3, 5}, {2, 10}});
+        VALVULA_1("Valvula 1", Color.decode("#FF6B6B"), new int[][]{{1, 10}, {-1, 0}, {3, 5}}),
+        VALVULA_2("Valvula 2", Color.decode("#4ECDC4"), new int[][]{{2, 12}, {3, 7}, {2, 2}}),
+        VALVULA_3("Valvula 3", Color.decode("#95E1D3"), new int[][]{{1, 5}, {-1, 0}, {3, 10}}),
+        VALVULA_4("Valvula 4", Color.decode("#F38181"), new int[][]{{1, 2}, {3, 5}, {2, 10}});
 
+        private final String displayName;
         private final Color color;
         private final int[][] route; // [step][machineNum, processTime]
 
-        Type(Color color, int[][] route) {
+        Type(String displayName, Color color, int[][] route) {
+            this.displayName = displayName;
             this.color = color;
             this.route = route;
         }
 
+        public String getDisplayName() { return displayName; }
         public Color getColor() { return color; }
         public int[][] getRoute() { return route; }
     }
@@ -153,6 +156,6 @@ public class Valve {
 
     @Override
     public String toString() {
-        return String.format("%s#%d", type.name(), id);
+        return String.format("%s#%d", type.getDisplayName(), id);
     }
 }

@@ -7,9 +7,10 @@ import java.util.*;
 public class ShiftCalendar {
     private final boolean[] workingHours;
     private static final int HOURS_PER_WEEK = 168;
+    private final Set<Integer> workingDays;
+    private final List<int[]> shiftBlocks;
     private final int shiftStartHour;
     private final int shiftEndHour;
-    private final Set<Integer> workingDays;
 
     public ShiftCalendar() {
         Config config = Config.getInstance();
@@ -17,18 +18,26 @@ public class ShiftCalendar {
         this.shiftStartHour = config.getShiftStartHour();
         this.shiftEndHour = config.getShiftEndHour();
         this.workingDays = new HashSet<>();
+        this.shiftBlocks = new ArrayList<>();
 
         String[] dayNames = config.getWorkingDays();
         for (String day : dayNames) {
             workingDays.add(getDayIndex(day.trim()));
         }
 
+        List<int[]> configuredBlocks = config.getShiftBlocks();
+        if (configuredBlocks.isEmpty()) {
+            shiftBlocks.add(new int[]{shiftStartHour, shiftEndHour});
+        } else {
+            shiftBlocks.addAll(configuredBlocks);
+        }
+
         this.workingHours = new boolean[HOURS_PER_WEEK];
         initializeShifts();
 
         Logger.getInstance().info(String.format(
-            "Shift calendar initialized: %d-%d hours, %d working days",
-            shiftStartHour, shiftEndHour, workingDays.size()));
+            "Shift calendar initialized: %d blocks, %d working days",
+            shiftBlocks.size(), workingDays.size()));
     }
 
     private int getDayIndex(String dayName) {
@@ -46,8 +55,12 @@ public class ShiftCalendar {
 
     private void initializeShifts() {
         for (int dayIndex : workingDays) {
-            for (int hour = shiftStartHour; hour < shiftEndHour; hour++) {
-                workingHours[dayIndex * 24 + hour] = true;
+            for (int[] block : shiftBlocks) {
+                int start = Math.max(0, Math.min(23, block[0]));
+                int end = Math.max(0, Math.min(24, block[1]));
+                for (int hour = start; hour < end; hour++) {
+                    workingHours[dayIndex * 24 + hour] = true;
+                }
             }
         }
     }
@@ -71,14 +84,14 @@ public class ShiftCalendar {
     }
 
     public String getDayName(double time) {
-        String[] days = {"Monday", "Tuesday", "Wednesday", "Thursday",
-                        "Friday", "Saturday", "Sunday"};
+        String[] days = {"Lunes", "Martes", "Miercoles", "Jueves",
+                        "Viernes", "Sabado", "Domingo"};
         int day = ((int)(time / 24)) % 7;
         return days[day];
     }
 
     public String getDayNameShort(double time) {
-        String[] days = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
+        String[] days = {"Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"};
         int day = ((int)(time / 24)) % 7;
         return days[day];
     }
@@ -116,7 +129,7 @@ public class ShiftCalendar {
 
     @Override
     public String toString() {
-        return String.format("ShiftCalendar[%d-%d hrs, %.0f working hrs/week]",
-            shiftStartHour, shiftEndHour, getTotalWorkingHoursPerWeek());
+        return String.format("ShiftCalendar[%d blocks, %.0f working hrs/week]",
+            shiftBlocks.size(), getTotalWorkingHoursPerWeek());
     }
 }

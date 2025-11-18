@@ -29,7 +29,7 @@ public class ControlPanel extends JPanel {
 
         setLayout(new BorderLayout(10, 10));
         setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createTitledBorder("Simulation Control"),
+            BorderFactory.createTitledBorder("Control de Simulacion"),
             BorderFactory.createEmptyBorder(10, 10, 10, 10)
         ));
 
@@ -42,21 +42,21 @@ public class ControlPanel extends JPanel {
 
     private void initializeComponents() {
         // Buttons
-        startButton = createStyledButton("▶ Start", new Color(76, 175, 80));
-        pauseButton = createStyledButton("⏸ Pause", new Color(255, 152, 0));
-        stepButton = createStyledButton("⏭ Step", new Color(33, 150, 243));
-        resetButton = createStyledButton("🔄 Reset", new Color(244, 67, 54));
+        startButton = createStyledButton("▶ Iniciar", new Color(76, 175, 80));
+        pauseButton = createStyledButton("⏸ Pausa", new Color(255, 152, 0));
+        stepButton = createStyledButton("⏭ Paso", new Color(33, 150, 243));
+        resetButton = createStyledButton("🔄 Reiniciar", new Color(244, 67, 54));
 
         pauseButton.setEnabled(false);
 
         // Labels
-        timeLabel = new JLabel("Time: 0.00 hours");
+        timeLabel = new JLabel("Tiempo: 0.00 horas");
         timeLabel.setFont(new Font("Monospaced", Font.BOLD, 14));
 
-        weekLabel = new JLabel("Week 1 - Monday - 00:00");
+        weekLabel = new JLabel("Semana 1 - Lunes - 00:00");
         weekLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
 
-        statusLabel = new JLabel("Status: Ready");
+        statusLabel = new JLabel("Estado: Listo");
         statusLabel.setFont(new Font("Segoe UI", Font.ITALIC, 11));
 
         // Speed slider (1 = muy lento, 100 = muy rápido)
@@ -106,12 +106,12 @@ public class ControlPanel extends JPanel {
 
         // Speed panel
         JPanel speedPanel = new JPanel(new BorderLayout(5, 5));
-        speedPanel.add(new JLabel("Speed (1=Slow, 100=Fast):"), BorderLayout.WEST);
+        speedPanel.add(new JLabel("Velocidad (1=Lento, 100=Rapido):"), BorderLayout.WEST);
         speedPanel.add(speedSlider, BorderLayout.CENTER);
 
         // Progress panel
         JPanel progressPanel = new JPanel(new BorderLayout(5, 5));
-        progressPanel.add(new JLabel("Progress:"), BorderLayout.WEST);
+        progressPanel.add(new JLabel("Progreso:"), BorderLayout.WEST);
         progressPanel.add(progressBar, BorderLayout.CENTER);
 
         // Main layout
@@ -141,7 +141,7 @@ public class ControlPanel extends JPanel {
             startButton.setEnabled(false);
             pauseButton.setEnabled(true);
             stepButton.setEnabled(false);
-            statusLabel.setText("Status: Running");
+            statusLabel.setText("Estado: Ejecutando");
 
             updateTimer.start();
 
@@ -180,11 +180,11 @@ public class ControlPanel extends JPanel {
                     stopSimulation();
                     if (engine.getCurrentTime() >= engine.getEndTime()) {
                         JOptionPane.showMessageDialog(ControlPanel.this,
-                            "Simulation completed!\n\n" +
-                            "Total time: " + String.format("%.2f hours", engine.getCurrentTime()) +
-                            "\nCompleted valves: " + engine.getCompletedValves().size() +
-                            "\nCheck the Statistics tab for detailed results.",
-                            "Simulation Complete",
+                            "Simulacion finalizada!\n\n" +
+                            "Tiempo total: " + String.format("%.2f horas", engine.getCurrentTime()) +
+                            "\nValvulas completadas: " + engine.getCompletedValves().size() +
+                            "\nRevisa la pestaña de Estadisticas para mas detalles.",
+                            "Simulacion Completa",
                             JOptionPane.INFORMATION_MESSAGE);
                         Logger.getInstance().info("Simulation completed successfully");
                     }
@@ -199,13 +199,13 @@ public class ControlPanel extends JPanel {
         if (isRunning) {
             if (engine.isPaused()) {
                 engine.resume();
-                pauseButton.setText("⏸ Pause");
-                statusLabel.setText("Status: Running");
+                pauseButton.setText("⏸ Pausa");
+                statusLabel.setText("Estado: Ejecutando");
                 Logger.getInstance().info("Simulation resumed");
             } else {
                 engine.pause();
-                pauseButton.setText("▶ Resume");
-                statusLabel.setText("Status: Paused");
+                pauseButton.setText("▶ Reanudar");
+                statusLabel.setText("Estado: En Pausa");
                 Logger.getInstance().info("Simulation paused");
             }
         }
@@ -223,9 +223,9 @@ public class ControlPanel extends JPanel {
         updateTimer.stop();
         startButton.setEnabled(true);
         pauseButton.setEnabled(false);
-        pauseButton.setText("⏸ Pause");
+        pauseButton.setText("⏸ Pausa");
         stepButton.setEnabled(true);
-        statusLabel.setText("Status: Stopped");
+        statusLabel.setText("Estado: Detenido");
     }
 
     private void resetSimulation() {
@@ -245,7 +245,7 @@ public class ControlPanel extends JPanel {
         mainFrame.updateAllPanels();
         progressBar.setValue(0);
         progressBar.setString("0%");
-        statusLabel.setText("Status: Ready");
+        statusLabel.setText("Estado: Listo");
 
         Logger.getInstance().info("Simulation reset");
     }
@@ -257,8 +257,8 @@ public class ControlPanel extends JPanel {
         int hour = engine.getShiftCalendar().getHourOfDay(time);
         int minute = engine.getShiftCalendar().getMinuteOfHour(time);
 
-        timeLabel.setText(String.format("Time: %.2f hours", time));
-        weekLabel.setText(String.format("Week %d - %s - %02d:%02d",
+        timeLabel.setText(String.format("Tiempo: %.2f horas", time));
+        weekLabel.setText(String.format("Semana %d - %s - %02d:%02d",
             week, day, hour, minute));
 
         double progress = (time / engine.getEndTime()) * 100;

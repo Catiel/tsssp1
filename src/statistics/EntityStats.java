@@ -70,15 +70,19 @@ public class EntityStats {
         return totalArrivals > 0 ? (totalCompleted * 100.0 / totalArrivals) : 0;
     }
 
+    public double getAvgBlockedTime() {
+        return totalCompleted > 0 ? sumBlockedTime / totalCompleted : 0;
+    }
+
     public String getDetailedReport() {
         return String.format(
-            "%-12s | Arrivals: %4d | Completed: %4d | In System: %4d | Completion Rate: %5.1f%%\n" +
-            "             | Avg Time: %7.2f hrs | Min: %7.2f | Max: %7.2f\n" +
-            "             | Processing: %6.2f | Movement: %6.2f | Waiting: %6.2f | Blocked: %6.2f",
-            type.name(),
+            "%-12s | Llegadas: %4d | Completadas: %4d | En Sistema: %4d | %% Exito: %5.1f%%\n" +
+            "             | Tiempo Prom: %7.2f hrs | Min: %7.2f | Max: %7.2f\n" +
+            "             | Proc: %6.2f | Mov: %6.2f | Espera: %6.2f | Bloq: %6.2f",
+            type.getDisplayName(),
             totalArrivals, totalCompleted, currentInSystem, getCompletionRate(),
             getAvgTimeInSystem(), minTimeInSystem == Double.MAX_VALUE ? 0 : minTimeInSystem, maxTimeInSystem,
-            getAvgProcessingTime(), getAvgMovementTime(), getAvgWaitingTime(), getAvgWaitingTime()
+            getAvgProcessingTime(), getAvgMovementTime(), getAvgWaitingTime(), getAvgBlockedTime()
         );
     }
 

@@ -66,28 +66,28 @@ public class Statistics {
     public String generateReport(double currentTime) {
         StringBuilder sb = new StringBuilder();
         sb.append("╔═══════════════════════════════════════════════════════════╗\n");
-        sb.append("║          VALVE MANUFACTURING SIMULATION REPORT             ║\n");
+        sb.append("║        INFORME DE LA SIMULACION DE VALVULAS               ║\n");
         sb.append("╚═══════════════════════════════════════════════════════════╝\n\n");
 
-        sb.append(String.format("Simulation Time: %.2f hours (Week %d)\n\n",
+        sb.append(String.format("Tiempo Simulado: %.2f horas (Semana %d)\n\n",
             currentTime, (int)(currentTime/168) + 1));
 
         sb.append("┌─────────────────────────────────────────────────────────┐\n");
-        sb.append("│  ENTITY STATISTICS                                       │\n");
+        sb.append("│  ESTADISTICAS DE ENTIDADES                                │\n");
         sb.append("├─────────────────────────────────────────────────────────┤\n");
         for (EntityStats stats : entityStats.values()) {
             sb.append(stats.getDetailedReport()).append("\n");
         }
 
         sb.append("\n┌─────────────────────────────────────────────────────────┐\n");
-        sb.append("│  LOCATION STATISTICS                                     │\n");
+        sb.append("│  ESTADISTICAS DE UBICACIONES                              │\n");
         sb.append("├─────────────────────────────────────────────────────────┤\n");
         for (LocationStats stats : locationStats.values()) {
             sb.append(stats.getReport()).append("\n");
         }
 
         sb.append("\n┌─────────────────────────────────────────────────────────┐\n");
-        sb.append("│  RESOURCE STATISTICS                                     │\n");
+        sb.append("│  ESTADISTICAS DE RECURSOS                                 │\n");
         sb.append("├─────────────────────────────────────────────────────────┤\n");
         sb.append(craneStats.getReport()).append("\n");
 

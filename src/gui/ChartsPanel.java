@@ -3,12 +3,11 @@ package gui;
 import core.SimulationEngine;
 import model.Valve;
 import statistics.*;
+import utils.Localization;
 import org.jfree.chart.*;
-import org.jfree.chart.axis.*;
 import org.jfree.chart.plot.*;
 import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer;
 import org.jfree.data.xy.*;
-import org.jfree.data.category.*;
 import javax.swing.*;
 import java.awt.*;
 import java.util.*;
@@ -41,12 +40,12 @@ public class ChartsPanel extends JPanel {
         // Entity Progress Chart
         entityDataset = new XYSeriesCollection();
         for (Valve.Type type : Valve.Type.values()) {
-            entityDataset.addSeries(new XYSeries(type.name()));
+            entityDataset.addSeries(new XYSeries(type.getDisplayName()));
         }
         JFreeChart entityChart = ChartFactory.createXYLineChart(
-            "Valve Completion Progress",
-            "Time (hours)",
-            "Cumulative Completions",
+            "Progreso de Valvulas Completadas",
+            "Tiempo (horas)",
+            "Completadas Acumuladas",
             entityDataset,
             PlotOrientation.VERTICAL,
             true, true, false
@@ -57,12 +56,13 @@ public class ChartsPanel extends JPanel {
         // Machine Utilization Chart
         utilizationDataset = new XYSeriesCollection();
         for (String machine : Arrays.asList("M1", "M2", "M3")) {
-            utilizationDataset.addSeries(new XYSeries(machine));
+            utilizationDataset.addSeries(new XYSeries(
+                Localization.getLocationDisplayName(machine)));
         }
         JFreeChart utilChart = ChartFactory.createXYLineChart(
-            "Machine Utilization Over Time",
-            "Time (hours)",
-            "Utilization (%)",
+            "Utilizacion de Maquinas",
+            "Tiempo (horas)",
+            "Utilizacion (%)",
             utilizationDataset,
             PlotOrientation.VERTICAL,
             true, true, false
@@ -76,12 +76,13 @@ public class ChartsPanel extends JPanel {
         wipDataset = new XYSeriesCollection();
         for (String location : Arrays.asList("Almacen_M1", "Almacen_M2", "Almacen_M3",
                                              "M1", "M2", "M3")) {
-            wipDataset.addSeries(new XYSeries(location));
+            wipDataset.addSeries(new XYSeries(
+                Localization.getLocationDisplayName(location)));
         }
         JFreeChart wipChartObj = ChartFactory.createXYLineChart(
-            "Work in Process (WIP)",
-            "Time (hours)",
-            "Number of Valves",
+            "Trabajo en Proceso (WIP)",
+            "Tiempo (horas)",
+            "Numero de Valvulas",
             wipDataset,
             PlotOrientation.VERTICAL,
             true, true, false
@@ -91,11 +92,11 @@ public class ChartsPanel extends JPanel {
 
         // Crane Utilization Chart
         craneDataset = new XYSeriesCollection();
-        craneDataset.addSeries(new XYSeries("Crane Utilization"));
+        craneDataset.addSeries(new XYSeries("Utilizacion de la Grua"));
         JFreeChart craneChart = ChartFactory.createXYLineChart(
-            "Crane Utilization",
-            "Time (hours)",
-            "Utilization (%)",
+            "Utilizacion de la Grua",
+            "Tiempo (horas)",
+            "Utilizacion (%)",
             craneDataset,
             PlotOrientation.VERTICAL,
             true, true, false
@@ -156,7 +157,7 @@ public class ChartsPanel extends JPanel {
 
         for (Valve.Type type : Valve.Type.values()) {
             EntityStats entityStats = stats.getEntityStats(type);
-            XYSeries series = entityDataset.getSeries(type.name());
+            XYSeries series = entityDataset.getSeries(type.getDisplayName());
 
             if (series.getItemCount() == 0 ||
                 series.getX(series.getItemCount() - 1).doubleValue() < currentTime) {
@@ -170,7 +171,8 @@ public class ChartsPanel extends JPanel {
 
         for (String machineName : Arrays.asList("M1", "M2", "M3")) {
             model.Location machine = engine.getLocations().get(machineName);
-            XYSeries series = utilizationDataset.getSeries(machineName);
+            String displayName = Localization.getLocationDisplayName(machineName);
+            XYSeries series = utilizationDataset.getSeries(displayName);
 
             double utilization = machine.getUtilization(currentTime);
 
@@ -187,7 +189,8 @@ public class ChartsPanel extends JPanel {
         for (String locationName : Arrays.asList("Almacen_M1", "Almacen_M2", "Almacen_M3",
                                                   "M1", "M2", "M3")) {
             model.Location location = engine.getLocations().get(locationName);
-            XYSeries series = wipDataset.getSeries(locationName);
+            String displayName = Localization.getLocationDisplayName(locationName);
+            XYSeries series = wipDataset.getSeries(displayName);
 
             int contents = location.getCurrentContents();
 
@@ -201,7 +204,7 @@ public class ChartsPanel extends JPanel {
     private void updateCraneUtilization() {
         double currentTime = engine.getCurrentTime();
         model.Crane crane = engine.getCrane();
-        XYSeries series = craneDataset.getSeries("Crane Utilization");
+        XYSeries series = craneDataset.getSeries("Utilizacion de la Grua");
 
         double utilization = crane.getUtilization(currentTime);
 

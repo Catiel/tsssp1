@@ -13,7 +13,7 @@ public class MainFrame extends JFrame {
     private StatisticsPanel statisticsPanel;
 
     public MainFrame() {
-        setTitle("Valve Manufacturing Simulation - Professional Edition");
+        setTitle("Simulacion de Valvulas - Edicion Profesional");
         setSize(1600, 1000);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
@@ -48,9 +48,9 @@ public class MainFrame extends JFrame {
         mainPanel.add(controlPanel, BorderLayout.SOUTH);
 
         // FIXED: Remove createIconLabel() calls - just use strings
-        tabbedPane.addTab("🎬 Simulation", mainPanel);
-        tabbedPane.addTab("📊 Charts", chartsPanel);
-        tabbedPane.addTab("📈 Statistics", statisticsPanel);
+        tabbedPane.addTab("🎬 Simulacion", mainPanel);
+        tabbedPane.addTab("📊 Graficas", chartsPanel);
+        tabbedPane.addTab("📈 Estadisticas", statisticsPanel);
 
         add(tabbedPane, BorderLayout.CENTER);
 
@@ -64,7 +64,7 @@ public class MainFrame extends JFrame {
         statusBar.setBorder(BorderFactory.createEtchedBorder());
         statusBar.setPreferredSize(new Dimension(getWidth(), 25));
 
-        JLabel statusLabel = new JLabel("Ready - Valve Manufacturing Simulation v1.0");
+        JLabel statusLabel = new JLabel("Listo - Simulacion de Valvulas v1.0");
         statusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
         statusBar.add(statusLabel);
 
@@ -78,7 +78,7 @@ public class MainFrame extends JFrame {
             Runtime runtime = Runtime.getRuntime();
             long usedMemory = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024);
             long maxMemory = runtime.maxMemory() / (1024 * 1024);
-            memoryLabel.setText(String.format("Memory: %d MB / %d MB", usedMemory, maxMemory));
+            memoryLabel.setText(String.format("Memoria: %d MB / %d MB", usedMemory, maxMemory));
         });
         memoryTimer.start();
 

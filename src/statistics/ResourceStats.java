@@ -34,7 +34,7 @@ public class ResourceStats {
     }
 
     public String getReport() {
-        return String.format("%-12s | Total Trips: %5d | Avg Utilization: %5.1f%% | Current: %5.1f%%",
+        return String.format("%-12s | Viajes: %5d | Util Prom: %5.1f%% | Actual: %5.1f%%",
             name, getTotalTrips(), getAverageUtilization(), getCurrentUtilization());
     }
 
