@@ -19,6 +19,7 @@ public class Location {
     private double totalBusyTime;
     private double totalBlockedTime;
     private double lastUpdateTime;
+    private double totalObservedTime;
     private List<Integer> contentHistory;
     private List<Double> timeHistory;
 
@@ -34,6 +35,7 @@ public class Location {
         this.totalBusyTime = 0;
         this.totalBlockedTime = 0;
         this.lastUpdateTime = 0;
+        this.totalObservedTime = 0;
         this.contentHistory = Collections.synchronizedList(new ArrayList<>());
         this.timeHistory = Collections.synchronizedList(new ArrayList<>());
     }
@@ -73,13 +75,27 @@ public class Location {
 
     public synchronized void updateStatistics(double currentTime) {
         double deltaTime = currentTime - lastUpdateTime;
+        if (deltaTime < 0) {
+            deltaTime = 0;
+        }
 
-        if (processing.size() > 0) {
+        if (!timeHistory.isEmpty()) {
+            double lastTime = timeHistory.get(timeHistory.size() - 1);
+            if (Math.abs(currentTime - lastTime) < 1e-9) {
+                return;
+            }
+        }
+
+        if (processing.size() > 0 && deltaTime > 0) {
             totalBusyTime += deltaTime;
         }
 
-        if (!canAccept()) {
+        if (!canAccept() && deltaTime > 0) {
             totalBlockedTime += deltaTime;
+        }
+
+        if (deltaTime > 0) {
+            totalObservedTime += deltaTime;
         }
 
         contentHistory.add(getCurrentContents());
@@ -88,9 +104,12 @@ public class Location {
         lastUpdateTime = currentTime;
     }
 
-    public double getUtilization(double totalTime) {
-        if (totalTime == 0 || units == 0) return 0;
-        return (totalBusyTime / (totalTime * units)) * 100.0;
+    public double getUtilization() {
+        double denominator = totalObservedTime * units;
+        if (denominator <= 0) {
+            return 0;
+        }
+        return (totalBusyTime / denominator) * 100.0;
     }
 
     public synchronized double getAverageContents() {

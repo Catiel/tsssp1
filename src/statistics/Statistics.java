@@ -8,11 +8,15 @@ public class Statistics {
     private Map<Valve.Type, EntityStats> entityStats;
     private Map<String, LocationStats> locationStats;
     private ResourceStats craneStats;
+    private Map<Integer, Integer> arrivalsPerWeek;
+    private Map<Integer, Integer> completionsPerArrivalWeek;
 
     public Statistics() {
         entityStats = new ConcurrentHashMap<>();
         locationStats = new ConcurrentHashMap<>();
         craneStats = new ResourceStats("Grua");
+        arrivalsPerWeek = new ConcurrentHashMap<>();
+        completionsPerArrivalWeek = new ConcurrentHashMap<>();
 
         for (Valve.Type type : Valve.Type.values()) {
             entityStats.put(type, new EntityStats(type));
@@ -21,6 +25,8 @@ public class Statistics {
 
     public void recordArrival(Valve valve) {
         entityStats.get(valve.getType()).recordArrival(valve.getArrivalTime());
+        int week = getWeekIndex(valve.getArrivalTime());
+        arrivalsPerWeek.merge(week, 1, Integer::sum);
     }
 
     public void recordCompletion(Valve valve, double completionTime) {
@@ -31,6 +37,9 @@ public class Statistics {
         stats.addMovementTime(valve.getTotalMovementTime());
         stats.addWaitingTime(valve.getTotalWaitingTime());
         stats.addBlockedTime(valve.getTotalBlockedTime());
+
+        int arrivalWeek = getWeekIndex(valve.getArrivalTime());
+        completionsPerArrivalWeek.merge(arrivalWeek, 1, Integer::sum);
     }
 
     public void updateLocationStats(String locationName, int contents,
@@ -63,6 +72,22 @@ public class Statistics {
         return new HashMap<>(locationStats);
     }
 
+    public Map<Integer, Integer> getArrivalsPerWeek() {
+        return new HashMap<>(arrivalsPerWeek);
+    }
+
+    public Map<Integer, Integer> getCompletionsPerArrivalWeek() {
+        return new HashMap<>(completionsPerArrivalWeek);
+    }
+
+    public int getArrivalsForWeek(int week) {
+        return arrivalsPerWeek.getOrDefault(week, 0);
+    }
+
+    public int getCompletionsForArrivalWeek(int week) {
+        return completionsPerArrivalWeek.getOrDefault(week, 0);
+    }
+
     public String generateReport(double currentTime) {
         StringBuilder sb = new StringBuilder();
         sb.append("╔═══════════════════════════════════════════════════════════╗\n");
@@ -91,6 +116,24 @@ public class Statistics {
         sb.append("├─────────────────────────────────────────────────────────┤\n");
         sb.append(craneStats.getReport()).append("\n");
 
+        sb.append("\n┌─────────────────────────────────────────────────────────┐\n");
+        sb.append("│  ARRIBOS VS COMPLETADOS POR SEMANA DE ARRIBO              │\n");
+        sb.append("├─────────────────────────────────────────────────────────┤\n");
+        int maxWeek = arrivalsPerWeek.keySet().stream()
+            .mapToInt(Integer::intValue)
+            .max()
+            .orElse(0);
+        for (int week = 1; week <= maxWeek; week++) {
+            int arrivals = getArrivalsForWeek(week);
+            int completions = getCompletionsForArrivalWeek(week);
+            sb.append(String.format("Semana %02d | Llegadas: %3d | Completadas (segun arribo): %3d\n",
+                week, arrivals, completions));
+        }
+
         return sb.toString();
+    }
+
+    private int getWeekIndex(double time) {
+        return (int)Math.floor(time / 168.0) + 1;
     }
 }

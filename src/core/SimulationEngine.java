@@ -28,6 +28,7 @@ public class SimulationEngine {
     private Statistics statistics;
     private List<Valve> allValves;
     private List<Valve> completedValves;
+    private int dockToAlmacenMoves;
 
     // Configuration
     private static final double SAMPLE_INTERVAL = 1.0; // Sample stats every hour
@@ -48,6 +49,7 @@ public class SimulationEngine {
         this.statistics = new Statistics();
         this.allValves = Collections.synchronizedList(new ArrayList<>());
         this.completedValves = Collections.synchronizedList(new ArrayList<>());
+        this.dockToAlmacenMoves = 0;
 
         initializeLocations();
         initializeCrane();
@@ -72,6 +74,7 @@ public class SimulationEngine {
         for (int i = 1; i <= 10; i++) {
             locations.put("M1." + i, new Location("M1." + i, 1, 1,
                 new Point(560, 380)));
+            pathNetwork.registerLocationNode("M1." + i, pathNetwork.getNodeForLocation("M1"));
         }
 
         locations.put("Almacen_M2", new Location("Almacen_M2", 20, 1,
@@ -82,6 +85,7 @@ public class SimulationEngine {
         for (int i = 1; i <= 25; i++) {
             locations.put("M2." + i, new Location("M2." + i, 1, 1,
                 new Point(760, 300)));
+            pathNetwork.registerLocationNode("M2." + i, pathNetwork.getNodeForLocation("M2"));
         }
 
         locations.put("Almacen_M3", new Location("Almacen_M3", 30, 1,
@@ -92,6 +96,7 @@ public class SimulationEngine {
         for (int i = 1; i <= 17; i++) {
             locations.put("M3." + i, new Location("M3." + i, 1, 1,
                 new Point(900, 160)));
+            pathNetwork.registerLocationNode("M3." + i, pathNetwork.getNodeForLocation("M3"));
         }
     }
 
@@ -103,8 +108,14 @@ public class SimulationEngine {
 
     private void scheduleArrivals() {
         // Schedule arrivals every 168 hours (weekly) for 8 weeks
+        // CRÍTICO: Las válvulas llegan TODAS AL INICIO de cada semana
         for (int week = 0; week < WEEKS_TO_SIMULATE; week++) {
             double arrivalTime = week * 168.0;
+
+            // Ajustar al primer turno laboral de la semana
+            if (!shiftCalendar.isWorkingTime(arrivalTime)) {
+                arrivalTime = shiftCalendar.getNextWorkingTime(arrivalTime);
+            }
 
             // Schedule each valve type according to ProModel
             scheduleValveArrivals(Valve.Type.VALVULA_1, 10, arrivalTime);
@@ -115,16 +126,12 @@ public class SimulationEngine {
     }
 
     private void scheduleValveArrivals(Valve.Type type, int quantity, double time) {
-        // Adjust arrival time to next working shift if outside working hours
-        double arrivalTime = time;
-        if (!shiftCalendar.isWorkingTime(arrivalTime)) {
-            arrivalTime = shiftCalendar.getNextWorkingTime(arrivalTime);
-        }
-        
+        // TODAS las válvulas llegan exactamente al mismo tiempo
+        // ProModel: "Primera Vez 0" significa todas llegan al inicio
         for (int i = 0; i < quantity; i++) {
-            Valve valve = new Valve(type, arrivalTime);
+            Valve valve = new Valve(type, time);
             allValves.add(valve);
-            eventQueue.add(new Event(Event.Type.ARRIVAL, arrivalTime, valve, null));
+            eventQueue.add(new Event(Event.Type.ARRIVAL, time, valve, null));
         }
     }
 
@@ -198,9 +205,11 @@ public class SimulationEngine {
         Location dock = locations.get("DOCK");
         dock.addToQueue(valve);
         valve.setState(Valve.State.IN_QUEUE);
+        valve.setCurrentLocation(dock);
+        valve.startWaiting(currentTime); // Comenzar a contar tiempo de espera
         statistics.recordArrival(valve);
 
-        // Try to schedule crane movement (respects shift calendar)
+        // INMEDIATAMENTE intentar programar movimiento de grúa
         tryScheduleCraneMove();
 
         // If crane didn't start (outside shift), schedule wakeup
@@ -214,15 +223,32 @@ public class SimulationEngine {
         valve.endProcessing(currentTime);
         valve.advanceStep();
 
-        machineUnit.removeValve(valve);
+        // Verificar si hay espacio en destino ANTES de liberar máquina
+        String destination = getNextDestination(valve);
+        Location destLoc = destination != null ? locations.get(destination) : null;
+        
+        if (destLoc != null && !destLoc.canAccept()) {
+            // BLOQUEADO: Destino lleno, válvula permanece en máquina (ProModel Blk 1)
+            valve.setState(Valve.State.BLOCKED);
+            valve.startBlocked(currentTime);
+            // NO remover de machineUnit, permanece ocupando espacio
+            return; // NO liberar máquina ni programar grúa
+        }
+
+        // Destino tiene espacio: remover de la máquina
+        if (machineUnit != null) {
+            machineUnit.removeValve(valve);
+        }
 
         // Machine unit holds the valve temporarily; crane will pick it up
         valve.setCurrentLocation(machineUnit);
         valve.startWaiting(currentTime);
+        
+        // ALTA PRIORIDAD: Válvulas que terminaron procesamiento
         pendingCraneTransfers.add(valve);
 
         // Free machine capacity for next valve
-        String unitName = machineUnit.getName();
+        String unitName = machineUnit != null ? machineUnit.getName() : "";
         String machineBaseName = unitName.contains(".") ? unitName.substring(0, unitName.indexOf(".")) : unitName;
         String almacenName = "Almacen_" + machineBaseName;
         Location almacen = locations.get(almacenName);
@@ -230,7 +256,12 @@ public class SimulationEngine {
         if (almacen != null && machineParent != null) {
             checkMachineQueue(machineParent, almacen);
         }
+        
+        // CRÍTICO: Verificar válvulas bloqueadas SIEMPRE después de procesar
+        // El almacén puede tener espacio temporalmente antes de checkMachineQueue
+        checkBlockedValves();
 
+        // INMEDIATAMENTE intentar mover con grúa
         tryScheduleCraneMove();
     }
 
@@ -267,15 +298,27 @@ public class SimulationEngine {
                 break;
             }
 
+            // CRÍTICO: Terminar tiempo de espera antes de remover
+            nextValve.endWaiting(currentTime);
+            
             almacen.removeValve(nextValve);
             availableUnit.addToQueue(nextValve);
             availableUnit.moveToProcessing(nextValve);
 
             double processTime = nextValve.getCurrentProcessingTime();
             nextValve.startProcessing(currentTime);
+            nextValve.setCurrentLocation(availableUnit); // Actualizar ubicación
 
             eventQueue.add(new Event(Event.Type.END_PROCESSING,
                 currentTime + processTime, nextValve, null));
+        }
+        
+        // CRÍTICO: SIEMPRE verificar válvulas bloqueadas y dar oportunidad a grúa
+        // No importa si el almacén quedó lleno después de mover válvulas,
+        // puede haber válvulas en DOCK esperando ir a OTROS almacenes (M2, M3)
+        checkBlockedValves();
+        if (!crane.isBusy() && shiftCalendar.isWorkingTime(currentTime)) {
+            tryScheduleCraneMove();
         }
     }
 
@@ -289,6 +332,52 @@ public class SimulationEngine {
             return;
         }
         eventQueue.add(new Event(Event.Type.SHIFT_START, wakeTime, null, machineName));
+    }
+
+    private void checkBlockedValves() {
+        // Revisar todas las ubicaciones buscando válvulas bloqueadas
+        for (Location location : locations.values()) {
+            List<Valve> blockedValves = new ArrayList<>();
+            for (Valve valve : location.getAllValves()) {
+                if (valve.getState() == Valve.State.BLOCKED) {
+                    blockedValves.add(valve);
+                }
+            }
+            
+            for (Valve valve : blockedValves) {
+                String destination = getNextDestination(valve);
+                Location destLoc = destination != null ? locations.get(destination) : null;
+                
+                if (destLoc != null && destLoc.canAccept()) {
+                    // Destino ahora tiene espacio: desbloquear
+                    valve.endBlocked(currentTime);
+                    
+                    // Si está en DOCK, simplemente cambiar estado a IN_QUEUE
+                    if (location.getName().equals("DOCK")) {
+                        valve.setState(Valve.State.IN_QUEUE);
+                        // NO remover de DOCK, la grúa la recogerá
+                    } else {
+                        // Si está en máquina, preparar para transporte
+                        location.removeValve(valve);
+                        valve.setCurrentLocation(location);
+                        valve.startWaiting(currentTime);
+                        pendingCraneTransfers.add(valve);
+                        
+                        // Liberar espacio para siguiente válvula
+                        String unitName = location.getName();
+                        if (unitName.contains(".")) {
+                            String machineBaseName = unitName.substring(0, unitName.indexOf("."));
+                            String almacenName = "Almacen_" + machineBaseName;
+                            Location almacen = locations.get(almacenName);
+                            Location machineParent = locations.get(machineBaseName);
+                            if (almacen != null && machineParent != null) {
+                                checkMachineQueue(machineParent, almacen);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private void scheduleCraneWakeup() {
@@ -328,15 +417,22 @@ public class SimulationEngine {
             return;
         }
 
-        // Crane only works during shifts
-        if (!shiftCalendar.isWorkingTime(currentTime)) {
-            return;
+        // PRIORIDAD 1: Válvulas que terminaron procesamiento (liberan máquinas)
+        Valve valveToMove = pollPendingCraneTransfer();
+        boolean pendingFromMachine = valveToMove != null;
+        
+        // PRIORIDAD 2: Válvulas en DOCK esperando (ProModel FIRST 1 = primera DISPONIBLE)
+        if (valveToMove == null) {
+            if (!shiftCalendar.isWorkingTime(currentTime)) {
+                return; // Fuera de turno sólo atendemos descargas de máquinas
+            }
+            valveToMove = findFirstAvailableValveInDock();
         }
 
-        // Find valve that needs to move
-        Valve valveToMove = findValveNeedingTransport();
-
         if (valveToMove != null) {
+            if (!shiftCalendar.isWorkingTime(currentTime) && !pendingFromMachine) {
+                return;
+            }
             String destination = getNextDestination(valveToMove);
             Location destLoc = locations.get(destination);
 
@@ -345,29 +441,44 @@ public class SimulationEngine {
             }
         }
     }
-
-    private Valve findValveNeedingTransport() {
-        Valve machineValve = pollPendingCraneTransfer();
-        if (machineValve != null) {
-            return machineValve;
-        }
-
+    
+    private Valve findFirstAvailableValveInDock() {
         Location dock = locations.get("DOCK");
-        if (dock != null && dock.getQueueSize() > 0) {
-            Valve candidate = dock.peekQueue();
-            if (candidate != null) {
-                String destination = getNextDestination(candidate);
-                Location destLoc = destination != null ? locations.get(destination) : null;
-                if (destLoc != null && destLoc.canAccept()) {
-                    return candidate;
+        if (dock == null || dock.getQueueSize() == 0) {
+            return null;
+        }
+        
+        // Buscar PRIMERA válvula cuyo destino tenga espacio (ProModel FIRST 1)
+        for (Valve valve : dock.getAllValves()) {
+            String destination = getNextDestination(valve);
+            Location destLoc = destination != null ? locations.get(destination) : null;
+            
+            if (destination == null) {
+                continue;
+            }
+            
+            // CRÍTICO: Verificar espacio ANTES de saltarse por estar bloqueada
+            if (destLoc != null && destLoc.canAccept()) {
+                // Si estaba bloqueada, desbloquear
+                if (valve.getState() == Valve.State.BLOCKED) {
+                    valve.endBlocked(currentTime);
+                    valve.setState(Valve.State.IN_QUEUE);
+                }
+                return valve; // Primera disponible
+            } else if (destLoc != null && !destLoc.canAccept()) {
+                // Destino lleno: marcar bloqueada y continuar buscando
+                if (valve.getState() != Valve.State.BLOCKED) {
+                    valve.setState(Valve.State.BLOCKED);
+                    valve.startBlocked(currentTime);
                 }
             }
         }
-
-        return null;
+        
+        return null; // Todas bloqueadas o sin destino válido
     }
 
     private Valve pollPendingCraneTransfer() {
+        // Buscar válvula que necesita transporte desde máquinas
         Iterator<Valve> iterator = pendingCraneTransfers.iterator();
         while (iterator.hasNext()) {
             Valve valve = iterator.next();
@@ -413,6 +524,11 @@ public class SimulationEngine {
             return;
         }
 
+        // Si válvula estaba bloqueada, terminar bloqueo
+        if (valve.getState() == Valve.State.BLOCKED) {
+            valve.endBlocked(currentTime);
+        }
+
         PathNetwork.PathResult pathResult = pathNetwork.getPathForLocations(from.getName(), destination);
         List<Point> pathPoints;
         List<Double> segmentDistances;
@@ -439,6 +555,10 @@ public class SimulationEngine {
 
         crane.startMove(pathPoints, segmentDistances, totalDistanceMeters, travelTime);
 
+        if (from.getName().equals("DOCK")) {
+            dockToAlmacenMoves++;
+        }
+
         eventQueue.add(new Event(Event.Type.START_CRANE_MOVE,
             currentTime, valve, destination));
         eventQueue.add(new Event(Event.Type.END_CRANE_MOVE,
@@ -447,27 +567,40 @@ public class SimulationEngine {
 
     private void handleStartCraneMove(Valve valve, String destination) {
         Location from = valve.getCurrentLocation();
-        from.removeValve(valve);
+        if (from != null) {
+            from.removeValve(valve);
+        }
+        
+        // Finalizar tiempo de espera
+        if (valve.getState() == Valve.State.IN_QUEUE || 
+            valve.getState() == Valve.State.WAITING_CRANE) {
+            valve.endWaiting(currentTime);
+        }
+        
         crane.pickupValve(valve);
         valve.setState(Valve.State.IN_TRANSIT);
+        valve.setCurrentLocation(null); // En tránsito = sin ubicación fija
     }
 
     private void handleEndCraneMove(Valve valve, String destination) {
         Location destLoc = locations.get(destination);
 
-        crane.releaseValve();
+        // Sincronizar animación antes de liberar
         crane.completeTrip();
+        crane.releaseValve();
         crane.setBusy(false);
 
         if (destination.equals("STOCK")) {
             destLoc.addToQueue(valve);
             valve.setState(Valve.State.COMPLETED);
+            valve.setCurrentLocation(destLoc);
             completedValves.add(valve);
             statistics.recordCompletion(valve, currentTime);
         } else if (destination.startsWith("Almacen")) {
             // Crane drops valve at storage
             destLoc.addToQueue(valve);
             valve.setState(Valve.State.IN_QUEUE);
+            valve.setCurrentLocation(destLoc);
 
             // Immediately try to move to machine (ProModel: Almacen_M1 -> M1 is instant)
             String machineName = destination.replace("Almacen_", "");
@@ -476,8 +609,12 @@ public class SimulationEngine {
                 checkMachineQueue(machineParent, destLoc);
             }
         }
+        
+        // CRÍTICO: Verificar válvulas bloqueadas que ahora pueden moverse
+        checkBlockedValves();
 
-        // Try next crane move (respects shifts)
+        // CRÍTICO: Intentar siguiente movimiento INMEDIATAMENTE
+        // La grúa debe estar constantemente activa
         tryScheduleCraneMove();
 
         // If crane can't move (shift ended), schedule wakeup
@@ -495,14 +632,14 @@ public class SimulationEngine {
             loc.updateStatistics(currentTime);
             statistics.updateLocationStats(loc.getName(),
                 loc.getCurrentContents(),
-                loc.getUtilization(currentTime),
+                loc.getUtilization(),
                 currentTime);
         }
 
         // Update crane statistics
         crane.updateStatistics(currentTime);
         statistics.updateCraneStats(
-            crane.getUtilization(currentTime),
+            crane.getUtilization(),
             crane.getTotalTrips(),
             currentTime);
     }
@@ -522,6 +659,7 @@ public class SimulationEngine {
         initializeCrane();
         scheduleArrivals();
         scheduleStatisticsSampling();
+        dockToAlmacenMoves = 0;
     }
 
     // Getters
@@ -539,4 +677,42 @@ public class SimulationEngine {
         return allValves.size() - completedValves.size();
     }
     public PathNetwork getPathNetwork() { return pathNetwork; }
+    public int getDockToAlmacenMoves() { return dockToAlmacenMoves; }
+    public boolean hasPendingEvents() { return !eventQueue.isEmpty(); }
+
+    // Debug helper to inspect valves remaining in a given location (e.g., DOCK)
+    public List<String> getValveDetailsForLocation(String locationName) {
+        Location location = locations.get(locationName);
+        if (location == null) {
+            return Collections.emptyList();
+        }
+
+        List<String> details = new ArrayList<>();
+        for (Valve valve : location.getAllValves()) {
+            String next = determineNextLocation(valve);
+            details.add(String.format("%s | estado=%s | paso=%d | siguiente=%s",
+                valve,
+                valve.getState(),
+                valve.getCurrentStep(),
+                next == null ? "-" : next));
+        }
+        return details;
+    }
+
+    private String determineNextLocation(Valve valve) {
+        Location current = valve.getCurrentLocation();
+        if (current == null) {
+            return null;
+        }
+
+        if ("DOCK".equals(current.getName())) {
+            return valve.getNextAlmacen();
+        }
+
+        if (valve.isRouteComplete()) {
+            return "STOCK";
+        }
+
+        return valve.getNextAlmacen();
+    }
 }

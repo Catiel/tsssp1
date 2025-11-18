@@ -4,6 +4,7 @@ core\Event.class
 gui\SimulationPanel$2.class
 gui\MainFrame.class
 utils\Logger$Level.class
+DebugMain.class
 gui\StatisticsPanel$1.class
 utils\Logger$PerformanceTimer.class
 core\Event$Type.class

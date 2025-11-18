@@ -60,11 +60,14 @@ public class ControlPanel extends JPanel {
         statusLabel.setFont(new Font("Segoe UI", Font.ITALIC, 11));
 
         // Speed slider (1 = muy lento, 100 = muy rápido)
-        speedSlider = new JSlider(1, 100, 10);  // Default: lento para ver animación
+        speedSlider = new JSlider(1, 100, 50);  // Default: velocidad media
         speedSlider.setMajorTickSpacing(25);
         speedSlider.setMinorTickSpacing(5);
         speedSlider.setPaintTicks(true);
         speedSlider.setPaintLabels(true);
+        
+        // Tooltip para explicar velocidad
+        speedSlider.setToolTipText("1=Lento (ver animación), 50=Normal, 100=Rápido (resultados)");
 
         // Progress bar
         progressBar = new JProgressBar(0, 100);
@@ -155,10 +158,21 @@ public class ControlPanel extends JPanel {
                         engine.step();
 
                         // Sleep based on speed slider
-                        // Speed 1 = 100ms per step (muy lento)
-                        // Speed 100 = 1ms per step (rápido)
+                        // Speed 1-20: Muy lento (ver animación detallada)
+                        // Speed 21-50: Normal (balance)
+                        // Speed 51-80: Rápido
+                        // Speed 81-100: Máximo (sin delay casi)
                         int speed = speedSlider.getValue();
-                        int delay = 101 - speed; // Inverted: higher speed = lower delay
+                        int delay;
+                        if (speed <= 20) {
+                            delay = 150 - (speed * 5); // 145ms a 50ms
+                        } else if (speed <= 50) {
+                            delay = 50 - (speed - 20); // 50ms a 20ms
+                        } else if (speed <= 80) {
+                            delay = 20 - ((speed - 50) / 3); // 20ms a 10ms
+                        } else {
+                            delay = Math.max(1, 10 - ((speed - 80) / 5)); // 10ms a 1ms
+                        }
 
                         try {
                             Thread.sleep(delay);

@@ -251,11 +251,18 @@ public class AnimationPanel extends JPanel {
         // Contar unidades activas y válvulas
         int activeUnits = 0;
         int totalValves = 0;
+        int queuedValves = 0;
+        int processingValves = 0;
+        
         for (int i = 1; i <= unitCount; i++) {
             Location unit = engine.getLocations().get(baseName + "." + i);
             if (unit != null) {
-                if (unit.getProcessingSize() > 0) activeUnits++;
+                int procSize = unit.getProcessingSize();
+                int qSize = unit.getQueueSize();
+                if (procSize > 0) activeUnits++;
                 totalValves += unit.getCurrentContents();
+                queuedValves += qSize;
+                processingValves += procSize;
             }
         }
 
@@ -300,7 +307,7 @@ public class AnimationPanel extends JPanel {
         g2d.drawString(String.format("Activas: %d/%d", activeUnits, unitCount), x + 10, y + h - 45);
         
         g2d.setFont(new Font("Arial", Font.PLAIN, 10));
-        g2d.drawString(String.format("Válvulas: %d", totalValves), x + 10, y + h - 30);
+        g2d.drawString(String.format("Procesando: %d | En cola: %d", processingValves, queuedValves), x + 10, y + h - 30);
         g2d.drawString(String.format("Util: %.1f%%", (activeUnits * 100.0 / unitCount)), x + 10, y + h - 15);
 
         // Dibujar algunas válvulas si hay
@@ -391,20 +398,49 @@ public class AnimationPanel extends JPanel {
 
     private void drawInfo(Graphics2D g2d) {
         g2d.setColor(new Color(255, 255, 255, 240));
-        g2d.fillRoundRect(20, 20, 240, 140, 12, 12);
+        g2d.fillRoundRect(20, 20, 280, 180, 12, 12);
         g2d.setColor(new Color(100, 120, 180));
         g2d.setStroke(new BasicStroke(2.5f));
-        g2d.drawRoundRect(20, 20, 240, 140, 12, 12);
+        g2d.drawRoundRect(20, 20, 280, 180, 12, 12);
 
         g2d.setColor(Color.BLACK);
         g2d.setFont(new Font("Arial", Font.BOLD, 13));
         g2d.drawString("Estado del Sistema", 35, 42);
 
-        g2d.setFont(new Font("Monospaced", Font.PLAIN, 11));
-        g2d.drawString(String.format("Tiempo: %.1f hrs", engine.getCurrentTime()), 35, 62);
+        g2d.setFont(new Font("Monospaced", Font.PLAIN, 10));
+        double time = engine.getCurrentTime();
+        int week = (int)(time / 168.0) + 1;
+        g2d.drawString(String.format("Tiempo: %.1f hrs (Sem %d)", time, week), 35, 62);
         g2d.drawString("En Sistema: " + engine.getTotalValvesInSystem(), 35, 80);
         g2d.drawString("Completadas: " + engine.getCompletedValves().size(), 35, 98);
-        g2d.drawString("Viajes Grua: " + engine.getCrane().getTotalTrips(), 35, 116);
-        g2d.drawString("Ruta Actual: " + engine.getCrane().getCurrentPathPoints().size(), 35, 134);
+        
+        // Producción por semana
+        int completadas = engine.getCompletedValves().size();
+        double semanas = Math.max(1, time / 168.0);
+        double produccionSemanal = completadas / semanas;
+        g2d.drawString(String.format("Prod/Semana: %.1f", produccionSemanal), 35, 116);
+        
+        g2d.drawString("Viajes Grua: " + engine.getCrane().getTotalTrips(), 35, 134);
+        
+        // Estado de máquinas
+        g2d.setFont(new Font("Arial", Font.BOLD, 10));
+        g2d.drawString("Maquinas Activas:", 35, 154);
+        g2d.setFont(new Font("Monospaced", Font.PLAIN, 10));
+        String machineStatus = String.format("M1:%d M2:%d M3:%d",
+            getActiveMachines("M1", 10),
+            getActiveMachines("M2", 25),
+            getActiveMachines("M3", 17));
+        g2d.drawString(machineStatus, 35, 170);
+    }
+
+    private int getActiveMachines(String baseName, int count) {
+        int active = 0;
+        for (int i = 1; i <= count; i++) {
+            Location unit = engine.getLocations().get(baseName + "." + i);
+            if (unit != null && unit.getProcessingSize() > 0) {
+                active++;
+            }
+        }
+        return active;
     }
 }

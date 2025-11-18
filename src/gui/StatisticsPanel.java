@@ -7,6 +7,7 @@ import utils.Localization;
 import javax.swing.*;
 import javax.swing.table.*;
 import java.awt.*;
+import java.util.List;
 
 public class StatisticsPanel extends JPanel {
     private SimulationEngine engine;
@@ -184,7 +185,7 @@ public class StatisticsPanel extends JPanel {
             loc.getCurrentContents(),
             (int)loc.getMaxContents(),
             String.format("%.2f", loc.getAverageContents()),
-            String.format("%.1f%%", loc.getUtilization(currentTime)),
+            String.format("%.1f%%", loc.getUtilization()),
             loc.getTotalEntries(),
             loc.getTotalExits()
         });
@@ -206,7 +207,7 @@ public class StatisticsPanel extends JPanel {
                 totalExits += unit.getTotalExits();
                 maxContents = Math.max(maxContents, unit.getMaxContents());
                 avgContents += unit.getAverageContents();
-                avgUtilization += unit.getUtilization(currentTime);
+                avgUtilization += unit.getUtilization();
             }
         }
         avgContents /= unitCount;
@@ -227,15 +228,14 @@ public class StatisticsPanel extends JPanel {
     private void updateResourceStatistics() {
         resourceModel.setRowCount(0);
         model.Crane crane = engine.getCrane();
-        double currentTime = engine.getCurrentTime();
 
         resourceModel.addRow(new Object[]{
             crane.getName(),
             1,
             crane.getTotalTrips(),
             String.format("%.2f hrs", crane.getTotalTravelTime()),
-            String.format("%.1f%%", crane.getUtilization(currentTime)),
-            String.format("%.1f%%", crane.getUtilization(currentTime))
+            String.format("%.1f%%", crane.getUtilization()),
+            String.format("%.1f%%", crane.getUtilization())
         });
     }
 
@@ -250,11 +250,10 @@ public class StatisticsPanel extends JPanel {
 
         double maxUtil = 0;
         String bottleneck = "Ninguno";
-        double currentTime = engine.getCurrentTime();
 
         for (model.Location loc : engine.getLocations().values()) {
             if (loc.getName().startsWith("M")) {
-                double util = loc.getUtilization(currentTime);
+                double util = loc.getUtilization();
                 if (util > maxUtil) {
                     maxUtil = util;
                     bottleneck = Localization.getLocationDisplayName(loc.getName());
@@ -264,6 +263,17 @@ public class StatisticsPanel extends JPanel {
 
         sb.append(String.format("Cuello Principal: %s (%.1f%% de utilizacion)\n",
             bottleneck, maxUtil));
+
+        // Mostrar válvulas pendientes en DOCK para diagnóstico
+        List<String> dockDetails = engine.getValveDetailsForLocation("DOCK");
+        if (!dockDetails.isEmpty()) {
+            sb.append("\n┌─────────────────────────────────────────────────────────┐\n");
+            sb.append("│  VÁLVULAS PENDIENTES EN DOCK                              │\n");
+            sb.append("├─────────────────────────────────────────────────────────┤\n");
+            for (String detail : dockDetails) {
+                sb.append("│  ").append(detail).append("\n");
+            }
+        }
 
         summaryArea.setText(sb.toString());
         summaryArea.setCaretPosition(0);

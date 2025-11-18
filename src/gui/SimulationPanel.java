@@ -7,7 +7,6 @@ import utils.Localization;
 import javax.swing.*;
 import javax.swing.table.*;
 import java.awt.*;
-import java.util.*;
 
 public class SimulationPanel extends JPanel {
     private SimulationEngine engine;
@@ -178,8 +177,6 @@ public class SimulationPanel extends JPanel {
 
     private void updateLocationStats() {
         locationModel.setRowCount(0);
-        double currentTime = engine.getCurrentTime();
-
         // Primero mostrar ubicaciones principales
         String[] mainLocations = {"DOCK", "STOCK", "Almacen_M1", "Almacen_M2", "Almacen_M3"};
         for (String name : mainLocations) {
@@ -190,18 +187,18 @@ public class SimulationPanel extends JPanel {
                     Localization.getLocationDisplayName(loc.getName()),
                     loc.getCurrentContents(),
                     capacity,
-                    String.format("%.1f%%", loc.getUtilization(currentTime))
+                    String.format("%.1f%%", loc.getUtilization())
                 });
             }
         }
 
         // Mostrar grupos de máquinas con sus totales
-        addMachineGroupStats("M1", 10, currentTime);
-        addMachineGroupStats("M2", 25, currentTime);
-        addMachineGroupStats("M3", 17, currentTime);
+        addMachineGroupStats("M1", 10);
+        addMachineGroupStats("M2", 25);
+        addMachineGroupStats("M3", 17);
     }
 
-    private void addMachineGroupStats(String baseName, int unitCount, double currentTime) {
+    private void addMachineGroupStats(String baseName, int unitCount) {
         int totalContents = 0;
         double avgUtilization = 0;
 
@@ -209,7 +206,7 @@ public class SimulationPanel extends JPanel {
             Location unit = engine.getLocations().get(baseName + "." + i);
             if (unit != null) {
                 totalContents += unit.getCurrentContents();
-                avgUtilization += unit.getUtilization(currentTime);
+                avgUtilization += unit.getUtilization();
             }
         }
         avgUtilization /= unitCount;
@@ -225,12 +222,11 @@ public class SimulationPanel extends JPanel {
     private void updateCraneStats() {
         craneModel.setRowCount(0);
         Crane crane = engine.getCrane();
-        double currentTime = engine.getCurrentTime();
 
         craneModel.addRow(new Object[]{"Estado", crane.isBusy() ? "OCUPADA" : "LIBRE"});
         craneModel.addRow(new Object[]{"Viajes Totales", crane.getTotalTrips()});
         craneModel.addRow(new Object[]{"Tiempo de Viaje", String.format("%.2f hrs", crane.getTotalTravelTime())});
-        craneModel.addRow(new Object[]{"Utilizacion", String.format("%.1f%%", crane.getUtilization(currentTime))});
+            craneModel.addRow(new Object[]{"Utilizacion", String.format("%.1f%%", crane.getUtilization())});
         craneModel.addRow(new Object[]{"Transportando", crane.getCarryingValve() != null ?
             crane.getCarryingValve().toString() : "Ninguno"});
     }

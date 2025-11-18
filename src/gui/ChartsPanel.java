@@ -126,12 +126,12 @@ public class ChartsPanel extends JPanel {
 
         // Set colors for series
         Color[] colors = {
-            new Color(255, 107, 107), // Red
-            new Color(78, 205, 196),  // Cyan
-            new Color(149, 225, 211), // Light cyan
-            new Color(243, 129, 129), // Pink
-            new Color(255, 159, 64),  // Orange
-            new Color(54, 162, 235)   // Blue
+            new Color(255, 23, 68),   // Rojo brillante (Valvula 1)
+            new Color(0, 188, 212),   // Cyan/Turquesa (Valvula 2)
+            new Color(118, 255, 3),   // Verde lima (Valvula 3)
+            new Color(255, 152, 0),   // Naranja (Valvula 4)
+            new Color(156, 39, 176),  // Púrpura
+            new Color(33, 150, 243)   // Azul
         };
 
         for (int i = 0; i < colors.length && i < plot.getSeriesCount(); i++) {
@@ -173,12 +173,33 @@ public class ChartsPanel extends JPanel {
     private void updateMachineUtilization() {
         double currentTime = engine.getCurrentTime();
 
-        for (String machineName : Arrays.asList("M1", "M2", "M3")) {
-            model.Location machine = engine.getLocations().get(machineName);
+        Map<String, Integer> groupSizes = Map.of(
+            "M1", 10,
+            "M2", 25,
+            "M3", 17
+        );
+
+        for (Map.Entry<String, Integer> entry : groupSizes.entrySet()) {
+            String machineName = entry.getKey();
+            int unitCount = entry.getValue();
             String displayName = Localization.getLocationDisplayName(machineName);
             XYSeries series = utilizationDataset.getSeries(displayName);
 
-            double utilization = machine.getUtilization(currentTime);
+            double totalUtilization = 0;
+            int countedUnits = 0;
+            for (int i = 1; i <= unitCount; i++) {
+                model.Location unit = engine.getLocations().get(machineName + "." + i);
+                if (unit != null) {
+                    totalUtilization += unit.getUtilization();
+                    countedUnits++;
+                }
+            }
+
+            if (countedUnits == 0) {
+                continue;
+            }
+
+            double utilization = totalUtilization / countedUnits;
 
             if (series.getItemCount() == 0 ||
                 series.getX(series.getItemCount() - 1).doubleValue() < currentTime) {
@@ -233,7 +254,7 @@ public class ChartsPanel extends JPanel {
         model.Crane crane = engine.getCrane();
         XYSeries series = craneDataset.getSeries("Utilizacion de la Grua");
 
-        double utilization = crane.getUtilization(currentTime);
+        double utilization = crane.getUtilization();
 
         if (series.getItemCount() == 0 ||
             series.getX(series.getItemCount() - 1).doubleValue() < currentTime) {

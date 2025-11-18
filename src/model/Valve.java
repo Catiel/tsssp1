@@ -5,10 +5,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class Valve {
     public enum Type {
-        VALVULA_1("Valvula 1", Color.decode("#FF6B6B"), new int[][]{{1, 10}, {-1, 0}, {3, 5}}),
-        VALVULA_2("Valvula 2", Color.decode("#4ECDC4"), new int[][]{{2, 12}, {3, 7}, {2, 2}}),
-        VALVULA_3("Valvula 3", Color.decode("#95E1D3"), new int[][]{{1, 5}, {-1, 0}, {3, 10}}),
-        VALVULA_4("Valvula 4", Color.decode("#F38181"), new int[][]{{1, 2}, {3, 5}, {2, 10}});
+        VALVULA_1("Valvula 1", Color.decode("#FF1744"), new int[][]{{1, 10}, {-1, 0}, {3, 5}}),      // Rojo brillante
+        VALVULA_2("Valvula 2", Color.decode("#00BCD4"), new int[][]{{2, 12}, {3, 7}, {2, 2}}),      // Cyan/Turquesa
+        VALVULA_3("Valvula 3", Color.decode("#76FF03"), new int[][]{{1, 5}, {-1, 0}, {3, 10}}),     // Verde lima
+        VALVULA_4("Valvula 4", Color.decode("#FF9800"), new int[][]{{1, 2}, {3, 5}, {2, 10}});
 
         private final String displayName;
         private final Color color;
@@ -67,11 +67,11 @@ public class Valve {
 
     public String getNextMachine() {
         int[][] route = type.getRoute();
-        while (currentStep < route.length) {
-            if (route[currentStep][0] != -1) {
-                return "M" + route[currentStep][0];
+        // NO modificar currentStep, solo leer
+        for (int step = currentStep; step < route.length; step++) {
+            if (route[step][0] != -1) {
+                return "M" + route[step][0];
             }
-            currentStep++;
         }
         return null;
     }
@@ -91,6 +91,11 @@ public class Valve {
 
     public void advanceStep() {
         currentStep++;
+        // Saltar pasos con máquina -1 (pasos opcionales/vacíos)
+        int[][] route = type.getRoute();
+        while (currentStep < route.length && route[currentStep][0] == -1) {
+            currentStep++;
+        }
     }
 
     public boolean isRouteComplete() {

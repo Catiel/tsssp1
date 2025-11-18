@@ -78,6 +78,15 @@ public class PathNetwork {
         return locationToNode.get(locationName);
     }
 
+    public void registerLocationNode(String locationName, String nodeKey) {
+        if (locationName == null || nodeKey == null) {
+            return;
+        }
+        if (nodes.containsKey(nodeKey)) {
+            locationToNode.put(locationName, nodeKey);
+        }
+    }
+
     public PathResult getPathForLocations(String fromLocation, String toLocation) {
         String startNode = getNodeForLocation(fromLocation);
         String endNode = getNodeForLocation(toLocation);
