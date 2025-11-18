@@ -710,6 +710,8 @@ public class SimulationEngine {
         double totalScheduled = statsUnits * scheduledPerUnit * weeksSimulated;
 
         double utilization = (totalScheduled > 0.0) ? (busySum / totalScheduled) * 100.0 : 0.0;
+        // Limitar al 100% máximo
+        utilization = Math.min(utilization, 100.0);
 
         statistics.updateLocationStats(machineBaseName, totalContents, utilization, sampleTime);
     }

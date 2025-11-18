@@ -175,6 +175,34 @@ public class Statistics {
                 week, arrivals, completions));
         }
 
+        // Análisis de cuellos de botella
+        sb.append("\n┌─────────────────────────────────────────────────────────┐\n");
+        sb.append("│  ANALISIS DE CUELLOS DE BOTELLA                           │\n");
+        sb.append("├─────────────────────────────────────────────────────────┤\n");
+        
+        double maxUtil = 0;
+        String bottleneck = "Ninguno";
+        
+        // Buscar solo entre agregados M1, M2, M3
+        LocationStats m1Stats = locationStats.get("M1");
+        LocationStats m2Stats = locationStats.get("M2");
+        LocationStats m3Stats = locationStats.get("M3");
+        
+        if (m1Stats != null && m1Stats.getCurrentUtilization() > maxUtil) {
+            maxUtil = m1Stats.getCurrentUtilization();
+            bottleneck = "Maquina 1";
+        }
+        if (m2Stats != null && m2Stats.getCurrentUtilization() > maxUtil) {
+            maxUtil = m2Stats.getCurrentUtilization();
+            bottleneck = "Maquina 2";
+        }
+        if (m3Stats != null && m3Stats.getCurrentUtilization() > maxUtil) {
+            maxUtil = m3Stats.getCurrentUtilization();
+            bottleneck = "Maquina 3";
+        }
+        
+        sb.append(String.format("Cuello Principal: %s (%.1f%% de utilizacion)\n", bottleneck, maxUtil));
+
         return sb.toString();
     }
 

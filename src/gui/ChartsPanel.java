@@ -185,12 +185,12 @@ public class ChartsPanel extends JPanel {
             String displayName = Localization.getLocationDisplayName(machineName);
             XYSeries series = utilizationDataset.getSeries(displayName);
 
-            double totalUtilization = 0;
+            double busySum = 0;
             int countedUnits = 0;
             for (int i = 1; i <= unitCount; i++) {
                 model.Location unit = engine.getLocations().get(machineName + "." + i);
                 if (unit != null) {
-                    totalUtilization += unit.getUtilization();
+                    busySum += unit.getTotalBusyTime();
                     countedUnits++;
                 }
             }
@@ -199,7 +199,15 @@ public class ChartsPanel extends JPanel {
                 continue;
             }
 
-            double utilization = totalUtilization / countedUnits;
+            // Calcular utilizaci\u00f3n usando stats_units (igual que el reporte)
+            utils.Config config = utils.Config.getInstance();
+            double statsUnits = config.getMachineStatsUnits(machineName, countedUnits);
+            double scheduledPerUnit = engine.getShiftCalendar().getTotalWorkingHoursPerWeek();
+            double weeksSimulated = Math.max(currentTime, 1e-6) / 168.0;
+            double totalScheduled = statsUnits * scheduledPerUnit * weeksSimulated;
+            double utilization = (totalScheduled > 0.0) ? (busySum / totalScheduled) * 100.0 : 0.0;
+            // Limitar al 100% m\u00e1ximo
+            utilization = Math.min(utilization, 100.0);
 
             if (series.getItemCount() == 0 ||
                 series.getX(series.getItemCount() - 1).doubleValue() < currentTime) {

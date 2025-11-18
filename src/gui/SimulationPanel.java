@@ -192,24 +192,35 @@ public class SimulationPanel extends JPanel {
             }
         }
 
-        // Mostrar grupos de máquinas con sus totales
-        addMachineGroupStats("M1", 10);
-        addMachineGroupStats("M2", 25);
-        addMachineGroupStats("M3", 17);
+        // Mostrar grupos de máquinas con sus totales (leer cantidades desde config)
+        utils.Config config = utils.Config.getInstance();
+        addMachineGroupStats("M1", config.getMachineUnits("m1"));
+        addMachineGroupStats("M2", config.getMachineUnits("m2"));
+        addMachineGroupStats("M3", config.getMachineUnits("m3"));
     }
 
     private void addMachineGroupStats(String baseName, int unitCount) {
         int totalContents = 0;
-        double avgUtilization = 0;
+        double busySum = 0;
 
         for (int i = 1; i <= unitCount; i++) {
             Location unit = engine.getLocations().get(baseName + "." + i);
             if (unit != null) {
                 totalContents += unit.getCurrentContents();
-                avgUtilization += unit.getUtilization();
+                busySum += unit.getTotalBusyTime();
             }
         }
-        avgUtilization /= unitCount;
+        
+        // Calcular utilización usando stats_units (igual que el reporte)
+        utils.Config config = utils.Config.getInstance();
+        double statsUnits = config.getMachineStatsUnits(baseName, unitCount);
+        double scheduledPerUnit = engine.getShiftCalendar().getTotalWorkingHoursPerWeek();
+        double currentTime = engine.getCurrentTime();
+        double weeksSimulated = Math.max(currentTime, 1e-6) / 168.0;
+        double totalScheduled = statsUnits * scheduledPerUnit * weeksSimulated;
+        double avgUtilization = (totalScheduled > 0.0) ? (busySum / totalScheduled) * 100.0 : 0.0;
+        // Limitar al 100% máximo
+        avgUtilization = Math.min(avgUtilization, 100.0);
 
         locationModel.addRow(new Object[]{
             Localization.getLocationDisplayName(baseName) + " (" + unitCount + " unidades)",

@@ -7,7 +7,6 @@ import utils.Localization;
 import javax.swing.*;
 import javax.swing.table.*;
 import java.awt.*;
-import java.util.List;
 
 public class StatisticsPanel extends JPanel {
     private SimulationEngine engine;
@@ -172,10 +171,11 @@ public class StatisticsPanel extends JPanel {
             }
         }
 
-        // Grupos de máquinas
-        addMachineGroupRow("M1", 10, currentTime);
-        addMachineGroupRow("M2", 25, currentTime);
-        addMachineGroupRow("M3", 17, currentTime);
+        // Grupos de máquinas (leer cantidades desde config)
+        utils.Config config = utils.Config.getInstance();
+        addMachineGroupRow("M1", config.getMachineUnits("m1"), currentTime);
+        addMachineGroupRow("M2", config.getMachineUnits("m2"), currentTime);
+        addMachineGroupRow("M3", config.getMachineUnits("m3"), currentTime);
     }
 
     private void addLocationRow(model.Location loc, double currentTime) {
@@ -197,7 +197,7 @@ public class StatisticsPanel extends JPanel {
         int totalExits = 0;
         double maxContents = 0;
         double avgContents = 0;
-        double avgUtilization = 0;
+        double busySum = 0;
 
         for (int i = 1; i <= unitCount; i++) {
             model.Location unit = engine.getLocations().get(baseName + "." + i);
@@ -207,11 +207,20 @@ public class StatisticsPanel extends JPanel {
                 totalExits += unit.getTotalExits();
                 maxContents = Math.max(maxContents, unit.getMaxContents());
                 avgContents += unit.getAverageContents();
-                avgUtilization += unit.getUtilization();
+                busySum += unit.getTotalBusyTime();
             }
         }
         avgContents /= unitCount;
-        avgUtilization /= unitCount;
+        
+        // Calcular utilización usando stats_units (igual que el reporte)
+        utils.Config config = utils.Config.getInstance();
+        double statsUnits = config.getMachineStatsUnits(baseName, unitCount);
+        double scheduledPerUnit = engine.getShiftCalendar().getTotalWorkingHoursPerWeek();
+        double weeksSimulated = Math.max(currentTime, 1e-6) / 168.0;
+        double totalScheduled = statsUnits * scheduledPerUnit * weeksSimulated;
+        double avgUtilization = (totalScheduled > 0.0) ? (busySum / totalScheduled) * 100.0 : 0.0;
+        // Limitar al 100% máximo
+        avgUtilization = Math.min(avgUtilization, 100.0);
 
         locationModel.addRow(new Object[]{
             Localization.getLocationDisplayName(baseName) + " (" + unitCount + " units)",
@@ -251,29 +260,26 @@ public class StatisticsPanel extends JPanel {
         double maxUtil = 0;
         String bottleneck = "Ninguno";
 
-        for (model.Location loc : engine.getLocations().values()) {
-            if (loc.getName().startsWith("M")) {
-                double util = loc.getUtilization();
-                if (util > maxUtil) {
-                    maxUtil = util;
-                    bottleneck = Localization.getLocationDisplayName(loc.getName());
-                }
-            }
+        // Buscar solo entre agregados M1, M2, M3 (no unidades individuales)
+        statistics.LocationStats m1Stats = engine.getStatistics().getLocationStats("M1");
+        statistics.LocationStats m2Stats = engine.getStatistics().getLocationStats("M2");
+        statistics.LocationStats m3Stats = engine.getStatistics().getLocationStats("M3");
+        
+        if (m1Stats != null && m1Stats.getCurrentUtilization() > maxUtil) {
+            maxUtil = m1Stats.getCurrentUtilization();
+            bottleneck = Localization.getLocationDisplayName("M1");
+        }
+        if (m2Stats != null && m2Stats.getCurrentUtilization() > maxUtil) {
+            maxUtil = m2Stats.getCurrentUtilization();
+            bottleneck = Localization.getLocationDisplayName("M2");
+        }
+        if (m3Stats != null && m3Stats.getCurrentUtilization() > maxUtil) {
+            maxUtil = m3Stats.getCurrentUtilization();
+            bottleneck = Localization.getLocationDisplayName("M3");
         }
 
         sb.append(String.format("Cuello Principal: %s (%.1f%% de utilizacion)\n",
             bottleneck, maxUtil));
-
-        // Mostrar válvulas pendientes en DOCK para diagnóstico
-        List<String> dockDetails = engine.getValveDetailsForLocation("DOCK");
-        if (!dockDetails.isEmpty()) {
-            sb.append("\n┌─────────────────────────────────────────────────────────┐\n");
-            sb.append("│  VÁLVULAS PENDIENTES EN DOCK                              │\n");
-            sb.append("├─────────────────────────────────────────────────────────┤\n");
-            for (String detail : dockDetails) {
-                sb.append("│  ").append(detail).append("\n");
-            }
-        }
 
         summaryArea.setText(sb.toString());
         summaryArea.setCaretPosition(0);

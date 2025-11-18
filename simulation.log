@@ -5206,3 +5206,111 @@ java.util.ConcurrentModificationException
 [2025-11-18 16:38:01.768] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
 [2025-11-18 16:38:02.217] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
 [2025-11-18 16:38:02.294] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 16:38:36.743] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:38:36.743] [INFO] [Logger-Thread] Logger configured from Config: level=INFO
+[2025-11-18 16:38:36.743] [INFO] [Logger-Thread] Starting Valve Manufacturing Simulation...
+[2025-11-18 16:38:37.152] [INFO] [Logger-Thread] FlatLaf Dark theme loaded
+[2025-11-18 16:38:37.232] [INFO] [Logger-Thread] Initializing main frame...
+[2025-11-18 16:38:37.243] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:38:37.412] [INFO] [Logger-Thread] Control panel initialized
+[2025-11-18 16:38:37.696] [INFO] [Logger-Thread] Main frame initialized successfully
+[2025-11-18 16:38:38.040] [INFO] [Logger-Thread] Main frame displayed
+[2025-11-18 16:38:39.752] [INFO] [Logger-Thread] Simulation started
+[2025-11-18 16:38:48.824] [ERROR] [Logger-Thread] Error updating panels
+java.util.ConcurrentModificationException
+	at java.base/java.util.ArrayList$ArrayListSpliterator.forEachRemaining(ArrayList.java:1631)
+	at java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:509)
+	at java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:499)
+	at java.base/java.util.stream.ReduceOps$ReduceOp.evaluateSequential(ReduceOps.java:921)
+	at java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:234)
+	at java.base/java.util.stream.DoublePipeline.collect(DoublePipeline.java:541)
+	at java.base/java.util.stream.DoublePipeline.average(DoublePipeline.java:493)
+	at statistics.ResourceStats.getAverageUtilization(ResourceStats.java:25)
+	at statistics.ResourceStats.getReport(ResourceStats.java:38)
+	at statistics.Statistics.generateReport(Statistics.java:162)
+	at gui.StatisticsPanel.updateSummary(StatisticsPanel.java:244)
+	at gui.StatisticsPanel.updateStatistics(StatisticsPanel.java:139)
+	at gui.MainFrame.updateAllPanels(MainFrame.java:92)
+	at gui.ControlPanel.lambda$initializeTimers$4(ControlPanel.java:137)
+	at java.desktop/javax.swing.Timer.fireActionPerformed(Timer.java:311)
+	at java.desktop/javax.swing.Timer$DoPostEvent.run(Timer.java:243)
+	at java.desktop/java.awt.event.InvocationEvent.dispatch(InvocationEvent.java:318)
+	at java.desktop/java.awt.EventQueue.dispatchEventImpl(EventQueue.java:771)
+	at java.desktop/java.awt.EventQueue$4.run(EventQueue.java:722)
+	at java.desktop/java.awt.EventQueue$4.run(EventQueue.java:716)
+	at java.base/java.security.AccessController.doPrivileged(AccessController.java:399)
+	at java.base/java.security.ProtectionDomain$JavaSecurityAccessImpl.doIntersectionPrivilege(ProtectionDomain.java:86)
+	at java.desktop/java.awt.EventQueue.dispatchEvent(EventQueue.java:741)
+	at java.desktop/java.awt.EventDispatchThread.pumpOneEventForFilters(EventDispatchThread.java:203)
+	at java.desktop/java.awt.EventDispatchThread.pumpEventsForFilter(EventDispatchThread.java:124)
+	at java.desktop/java.awt.EventDispatchThread.pumpEventsForHierarchy(EventDispatchThread.java:113)
+	at java.desktop/java.awt.EventDispatchThread.pumpEvents(EventDispatchThread.java:109)
+	at java.desktop/java.awt.EventDispatchThread.pumpEvents(EventDispatchThread.java:101)
+	at java.desktop/java.awt.EventDispatchThread.run(EventDispatchThread.java:90)
+[2025-11-18 16:39:41.667] [INFO] [Logger-Thread] Simulation completed successfully
+[2025-11-18 16:42:28.322] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:42:28.342] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:42:29.036] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:42:29.119] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 16:42:35.114] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:42:35.125] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:42:35.632] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:42:35.693] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 16:42:41.468] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:42:41.473] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:42:41.802] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:42:41.860] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 16:43:13.323] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:43:13.343] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:43:13.937] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:43:14.042] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 16:43:22.090] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:43:22.103] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:43:22.602] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:43:22.682] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 16:44:53.384] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:44:53.384] [INFO] [Logger-Thread] Logger configured from Config: level=INFO
+[2025-11-18 16:44:53.384] [INFO] [Logger-Thread] Starting Valve Manufacturing Simulation...
+[2025-11-18 16:44:53.542] [INFO] [Logger-Thread] FlatLaf Dark theme loaded
+[2025-11-18 16:44:53.594] [INFO] [Logger-Thread] Initializing main frame...
+[2025-11-18 16:44:53.608] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:44:54.603] [INFO] [Logger-Thread] Control panel initialized
+[2025-11-18 16:44:54.755] [INFO] [Logger-Thread] Main frame initialized successfully
+[2025-11-18 16:44:54.917] [INFO] [Logger-Thread] Main frame displayed
+[2025-11-18 16:44:56.294] [INFO] [Logger-Thread] Simulation started
+[2025-11-18 16:46:01.498] [INFO] [Logger-Thread] Simulation completed successfully
+[2025-11-18 16:48:35.986] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:48:35.993] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:48:36.393] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:48:36.446] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 16:48:43.857] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:48:43.873] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:48:44.463] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:48:44.555] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 16:49:20.408] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:49:20.408] [INFO] [Logger-Thread] Logger configured from Config: level=INFO
+[2025-11-18 16:49:20.408] [INFO] [Logger-Thread] Starting Valve Manufacturing Simulation...
+[2025-11-18 16:49:20.596] [INFO] [Logger-Thread] FlatLaf Dark theme loaded
+[2025-11-18 16:49:20.639] [INFO] [Logger-Thread] Initializing main frame...
+[2025-11-18 16:49:20.643] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:49:20.725] [INFO] [Logger-Thread] Control panel initialized
+[2025-11-18 16:49:20.878] [INFO] [Logger-Thread] Main frame initialized successfully
+[2025-11-18 16:49:21.085] [INFO] [Logger-Thread] Main frame displayed
+[2025-11-18 16:49:22.743] [INFO] [Logger-Thread] Simulation started
+[2025-11-18 16:50:28.303] [INFO] [Logger-Thread] Simulation completed successfully
+[2025-11-18 16:52:32.242] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:52:32.263] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:52:33.302] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:52:33.383] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 16:52:48.166] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:52:48.179] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:52:48.744] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:52:48.811] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 16:52:54.774] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:52:54.787] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:52:55.474] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:52:55.581] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 16:53:40.488] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 16:53:40.501] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:53:41.092] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 16:53:41.146] [INFO] [Logger-Thread] Logger shutting down...
