@@ -2,6 +2,7 @@ package core;
 
 import model.*;
 import statistics.Statistics;
+import utils.Config;
 import java.awt.Point;
 import java.util.*;
 import java.util.concurrent.PriorityBlockingQueue;
@@ -32,6 +33,7 @@ public class SimulationEngine {
 
     // Configuration
     private static final double SAMPLE_INTERVAL = 1.0; // Sample stats every hour
+    private static final double SAMPLE_EPSILON = 1e-6;
     private static final int WEEKS_TO_SIMULATE = 8;
 
     public SimulationEngine() {
@@ -58,6 +60,11 @@ public class SimulationEngine {
     }
 
     private void initializeLocations() {
+        Config config = Config.getInstance();
+        int m1Units = Math.max(1, config.getMachineUnits("m1"));
+        int m2Units = Math.max(1, config.getMachineUnits("m2"));
+        int m3Units = Math.max(1, config.getMachineUnits("m3"));
+
         // Create locations with exact ProModel specifications
         locations.put("DOCK", new Location("DOCK", Integer.MAX_VALUE, 1,
             new Point(190, 140)));
@@ -68,10 +75,10 @@ public class SimulationEngine {
             new Point(560, 520)));
         // M1 parent - SOLO para enrutamiento, no procesa válvulas
         // Capacidad 0 para que las válvulas vayan directo a M1.x
-        locations.put("M1", new Location("M1", 0, 10,
+        locations.put("M1", new Location("M1", 0, m1Units,
             new Point(560, 380)));
         // Individual M1 units - ESTAS procesan las válvulas
-        for (int i = 1; i <= 10; i++) {
+        for (int i = 1; i <= m1Units; i++) {
             locations.put("M1." + i, new Location("M1." + i, 1, 1,
                 new Point(560, 380)));
             pathNetwork.registerLocationNode("M1." + i, pathNetwork.getNodeForLocation("M1"));
@@ -80,9 +87,9 @@ public class SimulationEngine {
         locations.put("Almacen_M2", new Location("Almacen_M2", 20, 1,
             new Point(960, 320)));
         // M2 parent - SOLO para enrutamiento
-        locations.put("M2", new Location("M2", 0, 25,
+        locations.put("M2", new Location("M2", 0, m2Units,
             new Point(760, 300)));
-        for (int i = 1; i <= 25; i++) {
+        for (int i = 1; i <= m2Units; i++) {
             locations.put("M2." + i, new Location("M2." + i, 1, 1,
                 new Point(760, 300)));
             pathNetwork.registerLocationNode("M2." + i, pathNetwork.getNodeForLocation("M2"));
@@ -91,9 +98,9 @@ public class SimulationEngine {
         locations.put("Almacen_M3", new Location("Almacen_M3", 30, 1,
             new Point(1080, 180)));
         // M3 parent - SOLO para enrutamiento
-        locations.put("M3", new Location("M3", 0, 17,
+        locations.put("M3", new Location("M3", 0, m3Units,
             new Point(900, 160)));
-        for (int i = 1; i <= 17; i++) {
+        for (int i = 1; i <= m3Units; i++) {
             locations.put("M3." + i, new Location("M3." + i, 1, 1,
                 new Point(900, 160)));
             pathNetwork.registerLocationNode("M3." + i, pathNetwork.getNodeForLocation("M3"));
@@ -627,21 +634,82 @@ public class SimulationEngine {
     }
 
     private void sampleStatistics() {
-        // Update location statistics
+        double sampleTime = currentTime;
+        double referenceTime = Math.max(0.0, sampleTime - SAMPLE_EPSILON);
+        boolean workingHour = shiftCalendar.isWorkingTime(referenceTime);
+
         for (Location loc : locations.values()) {
-            loc.updateStatistics(currentTime);
-            statistics.updateLocationStats(loc.getName(),
+            String name = loc.getName();
+            if (isMachineParent(name)) {
+                continue;
+            }
+
+            boolean shiftDependent = isMachineUnit(name);
+            boolean countTowardsSchedule = shiftDependent ? workingHour : true;
+
+            loc.updateStatistics(sampleTime, countTowardsSchedule);
+            statistics.updateLocationStats(name,
                 loc.getCurrentContents(),
                 loc.getUtilization(),
-                currentTime);
+                sampleTime);
         }
 
+        updateMachineAggregate("M1", sampleTime);
+        updateMachineAggregate("M2", sampleTime);
+        updateMachineAggregate("M3", sampleTime);
+
         // Update crane statistics
-        crane.updateStatistics(currentTime);
+        crane.updateStatistics(sampleTime);
         statistics.updateCraneStats(
             crane.getUtilization(),
             crane.getTotalTrips(),
-            currentTime);
+            sampleTime);
+    }
+
+    private boolean isMachineParent(String name) {
+        return "M1".equals(name) || "M2".equals(name) || "M3".equals(name);
+    }
+
+    private boolean isMachineUnit(String name) {
+        return name.startsWith("M1.") || name.startsWith("M2.") || name.startsWith("M3.");
+    }
+
+    private void updateMachineAggregate(String machineBaseName, double sampleTime) {
+        double busySum = 0.0;
+        double observedSum = 0.0;
+        int totalContents = 0;
+        int actualUnits = 0;
+
+        String prefix = machineBaseName + ".";
+        for (Map.Entry<String, Location> entry : locations.entrySet()) {
+            String name = entry.getKey();
+            if (!name.startsWith(prefix)) {
+                continue;
+            }
+
+            Location unit = entry.getValue();
+            busySum += unit.getTotalBusyTime();
+            observedSum += unit.getTotalObservedTime();
+            totalContents += unit.getCurrentContents();
+            actualUnits++;
+        }
+
+        Config config = Config.getInstance();
+        double statsUnits = config.getMachineStatsUnits(machineBaseName, actualUnits > 0 ? actualUnits : 1);
+        double scheduledPerUnit = shiftCalendar.getTotalWorkingHoursPerWeek();
+        double weeksSimulated = Math.max(sampleTime, SAMPLE_EPSILON) / 168.0;
+        double totalScheduled = statsUnits * scheduledPerUnit * weeksSimulated;
+
+        double utilization;
+        if (totalScheduled > 0.0) {
+            utilization = (busySum / totalScheduled) * 100.0;
+        } else if (observedSum > 0.0) {
+            utilization = (busySum / observedSum) * 100.0;
+        } else {
+            utilization = 0.0;
+        }
+
+        statistics.updateLocationStats(machineBaseName, totalContents, utilization, sampleTime);
     }
 
     // Control methods

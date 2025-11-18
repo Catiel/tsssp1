@@ -204,6 +204,11 @@ public class Config {
         return getInt(key, 1);
     }
 
+    public double getMachineStatsUnits(String machineName, double defaultValue) {
+        String key = "machine." + machineName.toLowerCase() + ".stats_units";
+        return getDouble(key, defaultValue);
+    }
+
     public int getValveArrivalQuantity(String valveType) {
         String key = "arrival." + valveType.toLowerCase() + ".quantity";
         return getInt(key, 10);

@@ -73,7 +73,7 @@ public class Location {
         return queue.peek();
     }
 
-    public synchronized void updateStatistics(double currentTime) {
+    public synchronized void updateStatistics(double currentTime, boolean countTowardsSchedule) {
         double deltaTime = currentTime - lastUpdateTime;
         if (deltaTime < 0) {
             deltaTime = 0;
@@ -90,11 +90,11 @@ public class Location {
             totalBusyTime += deltaTime;
         }
 
-        if (!canAccept() && deltaTime > 0) {
+        if (!canAccept() && deltaTime > 0 && countTowardsSchedule) {
             totalBlockedTime += deltaTime;
         }
 
-        if (deltaTime > 0) {
+        if (deltaTime > 0 && countTowardsSchedule) {
             totalObservedTime += deltaTime;
         }
 
@@ -110,6 +110,14 @@ public class Location {
             return 0;
         }
         return (totalBusyTime / denominator) * 100.0;
+    }
+
+    public synchronized double getTotalBusyTime() {
+        return totalBusyTime;
+    }
+
+    public synchronized double getTotalObservedTime() {
+        return totalObservedTime * units;
     }
 
     public synchronized double getAverageContents() {
