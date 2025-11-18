@@ -64,11 +64,13 @@ public class AnimationPanel extends JPanel {
         drawLocation(g2d, "DOCK");
         drawLocation(g2d, "STOCK");
         drawLocation(g2d, "Almacen_M1");
-        drawLocation(g2d, "M1");
         drawLocation(g2d, "Almacen_M2");
-        drawLocation(g2d, "M2");
         drawLocation(g2d, "Almacen_M3");
-        drawLocation(g2d, "M3");
+        
+        // Draw machine groups with their individual units
+        drawMachineGroup(g2d, "M1", 10);
+        drawMachineGroup(g2d, "M2", 25);
+        drawMachineGroup(g2d, "M3", 17);
 
         // Draw crane (must be AFTER locations so it's on top)
         drawCrane(g2d);
@@ -126,6 +128,12 @@ public class AnimationPanel extends JPanel {
         Point pos = locationPositions.get(name);
         if (pos == null) return;
 
+        // Las ubicaciones padre (M1, M2, M3) no se dibujan individualmente
+        // Solo se muestran sus unidades mediante drawMachineGroup
+        if (name.equals("M1") || name.equals("M2") || name.equals("M3")) {
+            return;
+        }
+
         int w = 140, h = 110;
         int x = pos.x - w/2;
         int y = pos.y - h/2;
@@ -178,10 +186,6 @@ public class AnimationPanel extends JPanel {
             loc.getCapacity() == Integer.MAX_VALUE ? "∞" : String.valueOf(loc.getCapacity()));
         g2d.setFont(new Font("Arial", Font.PLAIN, 11));
         g2d.drawString(cap, x + 8, y + 33);
-
-        if (name.startsWith("M")) {
-            drawMachineUnitInfo(g2d, x, y, w, h, loc);
-        }
 
         // Draw valves
         List<Valve> valves = loc.getAllValves();
@@ -238,27 +242,89 @@ public class AnimationPanel extends JPanel {
         }
     }
 
-    private void drawMachineUnitInfo(Graphics2D g2d, int x, int y, int w, int h, Location loc) {
-        int badgeWidth = 54;
-        int badgeHeight = 20;
-        int badgeX = x + w - badgeWidth - 10;
-        int badgeY = y + 6;
+    private void drawMachineGroup(Graphics2D g2d, String baseName, int unitCount) {
+        // Obtener posición del grupo
+        Location parentLoc = engine.getLocations().get(baseName);
+        if (parentLoc == null) return;
+        Point pos = parentLoc.getPosition();
 
-        g2d.setColor(new Color(255, 255, 255, 230));
-        g2d.fillRoundRect(badgeX, badgeY, badgeWidth, badgeHeight, 10, 10);
-        g2d.setColor(new Color(70, 70, 110));
-        g2d.setStroke(new BasicStroke(1.4f));
-        g2d.drawRoundRect(badgeX, badgeY, badgeWidth, badgeHeight, 10, 10);
+        // Contar unidades activas y válvulas
+        int activeUnits = 0;
+        int totalValves = 0;
+        for (int i = 1; i <= unitCount; i++) {
+            Location unit = engine.getLocations().get(baseName + "." + i);
+            if (unit != null) {
+                if (unit.getProcessingSize() > 0) activeUnits++;
+                totalValves += unit.getCurrentContents();
+            }
+        }
 
+        int w = 180, h = 140;
+        int x = pos.x - w/2;
+        int y = pos.y - h/2;
+
+        // Sombra
+        g2d.setColor(new Color(0, 0, 0, 40));
+        g2d.fillRoundRect(x + 4, y + 4, w, h, 12, 12);
+        
+        // Fondo del grupo
+        g2d.setColor(new Color(220, 230, 250, 230));
+        g2d.fillRoundRect(x, y, w, h, 12, 12);
+        
+        // Borde
+        g2d.setColor(new Color(100, 120, 180));
+        g2d.setStroke(new BasicStroke(3.0f));
+        g2d.drawRoundRect(x, y, w, h, 12, 12);
+
+        // Título del grupo
+        g2d.setColor(Color.BLACK);
+        g2d.setFont(new Font("Arial", Font.BOLD, 14));
+        String title = Localization.getLocationDisplayName(baseName);
+        g2d.drawString(title, x + 10, y + 22);
+
+        // Badge con número de unidades
+        int badgeX = x + w - 60;
+        int badgeY = y + 8;
+        g2d.setColor(new Color(100, 120, 180));
+        g2d.fillRoundRect(badgeX, badgeY, 50, 20, 8, 8);
+        g2d.setColor(Color.WHITE);
         g2d.setFont(new Font("Arial", Font.BOLD, 11));
-        String unitsText = loc.getUnits() + "×";
-        g2d.drawString(unitsText, badgeX + 12, badgeY + 14);
+        g2d.drawString(unitCount + " units", badgeX + 6, badgeY + 14);
 
-        g2d.setColor(new Color(60, 60, 90));
+        // Ícono de máquina
+        drawMachineIcon(g2d, x + w/2, y + 60, activeUnits > 0);
+
+        // Información de utilización
+        g2d.setColor(new Color(50, 50, 70));
+        g2d.setFont(new Font("Arial", Font.BOLD, 11));
+        g2d.drawString(String.format("Activas: %d/%d", activeUnits, unitCount), x + 10, y + h - 45);
+        
         g2d.setFont(new Font("Arial", Font.PLAIN, 10));
-        int infoY = y + h - 40;
-        g2d.drawString(String.format("Activas: %d/%d",
-            loc.getProcessingSize(), loc.getUnits()), x + 8, infoY);
+        g2d.drawString(String.format("Válvulas: %d", totalValves), x + 10, y + h - 30);
+        g2d.drawString(String.format("Util: %.1f%%", (activeUnits * 100.0 / unitCount)), x + 10, y + h - 15);
+
+        // Dibujar algunas válvulas si hay
+        if (totalValves > 0) {
+            List<Valve> allValves = new ArrayList<>();
+            for (int i = 1; i <= unitCount; i++) {
+                Location unit = engine.getLocations().get(baseName + "." + i);
+                if (unit != null) {
+                    allValves.addAll(unit.getAllValves());
+                }
+            }
+            int count = Math.min(8, allValves.size());
+            for (int i = 0; i < count; i++) {
+                Valve v = allValves.get(i);
+                int vx = x + w - 90 + (i % 4) * 18;
+                int vy = y + h - 28 + (i / 4) * 16;
+                drawValve(g2d, v, vx, vy);
+            }
+            if (allValves.size() > 8) {
+                g2d.setColor(Color.BLACK);
+                g2d.setFont(new Font("Arial", Font.BOLD, 9));
+                g2d.drawString("+" + (allValves.size() - 8), x + w - 25, y + h - 10);
+            }
+        }
     }
 
     private void drawValve(Graphics2D g2d, Valve v, int x, int y) {

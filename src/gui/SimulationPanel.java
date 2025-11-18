@@ -180,15 +180,46 @@ public class SimulationPanel extends JPanel {
         locationModel.setRowCount(0);
         double currentTime = engine.getCurrentTime();
 
-        for (Location loc : engine.getLocations().values()) {
-            String capacity = loc.getCapacity() == Integer.MAX_VALUE ? "∞" : String.valueOf(loc.getCapacity());
-            locationModel.addRow(new Object[]{
-                Localization.getLocationDisplayName(loc.getName()),
-                loc.getCurrentContents(),
-                capacity,
-                String.format("%.1f%%", loc.getUtilization(currentTime))
-            });
+        // Primero mostrar ubicaciones principales
+        String[] mainLocations = {"DOCK", "STOCK", "Almacen_M1", "Almacen_M2", "Almacen_M3"};
+        for (String name : mainLocations) {
+            Location loc = engine.getLocations().get(name);
+            if (loc != null) {
+                String capacity = loc.getCapacity() == Integer.MAX_VALUE ? "∞" : String.valueOf(loc.getCapacity());
+                locationModel.addRow(new Object[]{
+                    Localization.getLocationDisplayName(loc.getName()),
+                    loc.getCurrentContents(),
+                    capacity,
+                    String.format("%.1f%%", loc.getUtilization(currentTime))
+                });
+            }
         }
+
+        // Mostrar grupos de máquinas con sus totales
+        addMachineGroupStats("M1", 10, currentTime);
+        addMachineGroupStats("M2", 25, currentTime);
+        addMachineGroupStats("M3", 17, currentTime);
+    }
+
+    private void addMachineGroupStats(String baseName, int unitCount, double currentTime) {
+        int totalContents = 0;
+        double avgUtilization = 0;
+
+        for (int i = 1; i <= unitCount; i++) {
+            Location unit = engine.getLocations().get(baseName + "." + i);
+            if (unit != null) {
+                totalContents += unit.getCurrentContents();
+                avgUtilization += unit.getUtilization(currentTime);
+            }
+        }
+        avgUtilization /= unitCount;
+
+        locationModel.addRow(new Object[]{
+            Localization.getLocationDisplayName(baseName) + " (" + unitCount + " unidades)",
+            totalContents,
+            unitCount,
+            String.format("%.1f%%", avgUtilization)
+        });
     }
 
     private void updateCraneStats() {

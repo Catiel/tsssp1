@@ -162,18 +162,66 @@ public class StatisticsPanel extends JPanel {
         locationModel.setRowCount(0);
         double currentTime = engine.getCurrentTime();
 
-        for (model.Location loc : engine.getLocations().values()) {
-            locationModel.addRow(new Object[]{
-                Localization.getLocationDisplayName(loc.getName()),
-                loc.getCapacity() == Integer.MAX_VALUE ? "∞" : loc.getCapacity(),
-                loc.getCurrentContents(),
-                (int)loc.getMaxContents(),
-                String.format("%.2f", loc.getAverageContents()),
-                String.format("%.1f%%", loc.getUtilization(currentTime)),
-                loc.getTotalEntries(),
-                loc.getTotalExits()
-            });
+        // Ubicaciones principales
+        String[] mainLocations = {"DOCK", "STOCK", "Almacen_M1", "Almacen_M2", "Almacen_M3"};
+        for (String name : mainLocations) {
+            model.Location loc = engine.getLocations().get(name);
+            if (loc != null) {
+                addLocationRow(loc, currentTime);
+            }
         }
+
+        // Grupos de máquinas
+        addMachineGroupRow("M1", 10, currentTime);
+        addMachineGroupRow("M2", 25, currentTime);
+        addMachineGroupRow("M3", 17, currentTime);
+    }
+
+    private void addLocationRow(model.Location loc, double currentTime) {
+        locationModel.addRow(new Object[]{
+            Localization.getLocationDisplayName(loc.getName()),
+            loc.getCapacity() == Integer.MAX_VALUE ? "∞" : loc.getCapacity(),
+            loc.getCurrentContents(),
+            (int)loc.getMaxContents(),
+            String.format("%.2f", loc.getAverageContents()),
+            String.format("%.1f%%", loc.getUtilization(currentTime)),
+            loc.getTotalEntries(),
+            loc.getTotalExits()
+        });
+    }
+
+    private void addMachineGroupRow(String baseName, int unitCount, double currentTime) {
+        int totalContents = 0;
+        int totalEntries = 0;
+        int totalExits = 0;
+        double maxContents = 0;
+        double avgContents = 0;
+        double avgUtilization = 0;
+
+        for (int i = 1; i <= unitCount; i++) {
+            model.Location unit = engine.getLocations().get(baseName + "." + i);
+            if (unit != null) {
+                totalContents += unit.getCurrentContents();
+                totalEntries += unit.getTotalEntries();
+                totalExits += unit.getTotalExits();
+                maxContents = Math.max(maxContents, unit.getMaxContents());
+                avgContents += unit.getAverageContents();
+                avgUtilization += unit.getUtilization(currentTime);
+            }
+        }
+        avgContents /= unitCount;
+        avgUtilization /= unitCount;
+
+        locationModel.addRow(new Object[]{
+            Localization.getLocationDisplayName(baseName) + " (" + unitCount + " units)",
+            unitCount,
+            totalContents,
+            (int)maxContents,
+            String.format("%.2f", avgContents),
+            String.format("%.1f%%", avgUtilization),
+            totalEntries,
+            totalExits
+        });
     }
 
     private void updateResourceStatistics() {

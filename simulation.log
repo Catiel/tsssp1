@@ -4470,3 +4470,14 @@ java.util.ConcurrentModificationException
 [2025-11-17 20:49:25.642] [INFO] [Logger-Thread] Simulation started
 [2025-11-17 20:49:42.839] [INFO] [Logger-Thread] Simulation completed successfully
 [2025-11-17 20:49:44.621] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 09:02:10.878] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 09:02:10.879] [INFO] [Logger-Thread] Logger configured from Config: level=INFO
+[2025-11-18 09:02:10.879] [INFO] [Logger-Thread] Starting Valve Manufacturing Simulation...
+[2025-11-18 09:02:11.146] [INFO] [Logger-Thread] FlatLaf Dark theme loaded
+[2025-11-18 09:02:11.192] [INFO] [Logger-Thread] Initializing main frame...
+[2025-11-18 09:02:11.205] [INFO] [Logger-Thread] Shift calendar initialized: 2 blocks, 5 working days
+[2025-11-18 09:02:11.321] [INFO] [Logger-Thread] Control panel initialized
+[2025-11-18 09:02:11.505] [INFO] [Logger-Thread] Main frame initialized successfully
+[2025-11-18 09:02:12.871] [INFO] [Logger-Thread] Main frame displayed
+[2025-11-18 09:02:14.411] [INFO] [Logger-Thread] Simulation started
+[2025-11-18 09:03:30.814] [INFO] [Logger-Thread] Simulation reset

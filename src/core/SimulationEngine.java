@@ -64,10 +64,11 @@ public class SimulationEngine {
 
         locations.put("Almacen_M1", new Location("Almacen_M1", 20, 1,
             new Point(560, 520)));
-        // M1 parent with capacity 1 and 10 units (routing target)
-        locations.put("M1", new Location("M1", 1, 10,
+        // M1 parent - SOLO para enrutamiento, no procesa válvulas
+        // Capacidad 0 para que las válvulas vayan directo a M1.x
+        locations.put("M1", new Location("M1", 0, 10,
             new Point(560, 380)));
-        // Individual M1 units
+        // Individual M1 units - ESTAS procesan las válvulas
         for (int i = 1; i <= 10; i++) {
             locations.put("M1." + i, new Location("M1." + i, 1, 1,
                 new Point(560, 380)));
@@ -75,7 +76,8 @@ public class SimulationEngine {
 
         locations.put("Almacen_M2", new Location("Almacen_M2", 20, 1,
             new Point(960, 320)));
-        locations.put("M2", new Location("M2", 1, 25,
+        // M2 parent - SOLO para enrutamiento
+        locations.put("M2", new Location("M2", 0, 25,
             new Point(760, 300)));
         for (int i = 1; i <= 25; i++) {
             locations.put("M2." + i, new Location("M2." + i, 1, 1,
@@ -84,7 +86,8 @@ public class SimulationEngine {
 
         locations.put("Almacen_M3", new Location("Almacen_M3", 30, 1,
             new Point(1080, 180)));
-        locations.put("M3", new Location("M3", 1, 17,
+        // M3 parent - SOLO para enrutamiento
+        locations.put("M3", new Location("M3", 0, 17,
             new Point(900, 160)));
         for (int i = 1; i <= 17; i++) {
             locations.put("M3." + i, new Location("M3." + i, 1, 1,

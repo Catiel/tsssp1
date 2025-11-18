@@ -74,10 +74,14 @@ public class ChartsPanel extends JPanel {
 
         // WIP (Work in Process) Chart
         wipDataset = new XYSeriesCollection();
-        for (String location : Arrays.asList("Almacen_M1", "Almacen_M2", "Almacen_M3",
-                                             "M1", "M2", "M3")) {
+        for (String location : Arrays.asList("Almacen_M1", "Almacen_M2", "Almacen_M3")) {
             wipDataset.addSeries(new XYSeries(
                 Localization.getLocationDisplayName(location)));
+        }
+        // Add machine groups
+        for (String machine : Arrays.asList("M1", "M2", "M3")) {
+            wipDataset.addSeries(new XYSeries(
+                Localization.getLocationDisplayName(machine)));
         }
         JFreeChart wipChartObj = ChartFactory.createXYLineChart(
             "Trabajo en Proceso (WIP)",
@@ -186,8 +190,8 @@ public class ChartsPanel extends JPanel {
     private void updateWIP() {
         double currentTime = engine.getCurrentTime();
 
-        for (String locationName : Arrays.asList("Almacen_M1", "Almacen_M2", "Almacen_M3",
-                                                  "M1", "M2", "M3")) {
+        // Update almacenes
+        for (String locationName : Arrays.asList("Almacen_M1", "Almacen_M2", "Almacen_M3")) {
             model.Location location = engine.getLocations().get(locationName);
             String displayName = Localization.getLocationDisplayName(locationName);
             XYSeries series = wipDataset.getSeries(displayName);
@@ -198,6 +202,29 @@ public class ChartsPanel extends JPanel {
                 series.getX(series.getItemCount() - 1).doubleValue() < currentTime) {
                 series.add(currentTime, contents);
             }
+        }
+
+        // Update machine groups (sum of all units)
+        updateMachineGroupWIP("M1", 10, currentTime);
+        updateMachineGroupWIP("M2", 25, currentTime);
+        updateMachineGroupWIP("M3", 17, currentTime);
+    }
+
+    private void updateMachineGroupWIP(String baseName, int unitCount, double currentTime) {
+        int totalContents = 0;
+        for (int i = 1; i <= unitCount; i++) {
+            model.Location unit = engine.getLocations().get(baseName + "." + i);
+            if (unit != null) {
+                totalContents += unit.getCurrentContents();
+            }
+        }
+
+        String displayName = Localization.getLocationDisplayName(baseName);
+        XYSeries series = wipDataset.getSeries(displayName);
+
+        if (series.getItemCount() == 0 ||
+            series.getX(series.getItemCount() - 1).doubleValue() < currentTime) {
+            series.add(currentTime, totalContents);
         }
     }
 
