@@ -153,6 +153,26 @@ public class Location {
         return new ArrayList<>(timeHistory);
     }
 
+    public synchronized double getTotalResidenceTime() {
+        // Calcular la integral del contenido a lo largo del tiempo
+        // usando el método del trapecio
+        if (contentHistory.size() < 2 || timeHistory.size() < 2) {
+            return 0.0;
+        }
+        
+        List<Integer> contents = new ArrayList<>(contentHistory);
+        List<Double> times = new ArrayList<>(timeHistory);
+        
+        double totalArea = 0.0;
+        for (int i = 1; i < Math.min(contents.size(), times.size()); i++) {
+            double deltaTime = times.get(i) - times.get(i-1);
+            double avgContent = (contents.get(i) + contents.get(i-1)) / 2.0;
+            totalArea += avgContent * deltaTime;
+        }
+        
+        return totalArea;
+    }
+
     // Getters
     public String getName() { return name; }
     public int getCapacity() { return capacity; }
