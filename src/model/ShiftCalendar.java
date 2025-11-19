@@ -122,6 +122,24 @@ public class ShiftCalendar {
         return count;
     }
 
+    public int getFirstWorkingHourOfWeek() {
+        for (int i = 0; i < workingHours.length; i++) {
+            if (workingHours[i]) {
+                return i;
+            }
+        }
+        return 0;
+    }
+
+    public int getLastWorkingHourExclusive() {
+        for (int i = workingHours.length - 1; i >= 0; i--) {
+            if (workingHours[i]) {
+                return i + 1;
+            }
+        }
+        return workingHours.length;
+    }
+
     public boolean isWeekend(double time) {
         int day = getDayOfWeek(time);
         return day == 5 || day == 6; // Saturday or Sunday

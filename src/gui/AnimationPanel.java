@@ -193,13 +193,21 @@ public class AnimationPanel extends JPanel {
         g2d.drawString(Localization.getLocationDisplayName(name), x + 8, y + 18);
 
         // Capacity
-        String cap = String.format("%d/%s", loc.getCurrentContents(),
+        int displayedContents = loc.getCurrentContents();
+        if (name.equals("STOCK")) {
+            displayedContents = engine.getCompletedInventoryCount();
+        }
+
+        String cap = String.format("%d/%s", displayedContents,
             loc.getCapacity() == Integer.MAX_VALUE ? "∞" : String.valueOf(loc.getCapacity()));
         g2d.setFont(new Font("Arial", Font.PLAIN, 11));
         g2d.drawString(cap, x + 8, y + 33);
 
         // Draw valves - excluir la que está siendo transportada si la animación está en progreso
         List<Valve> valves = new ArrayList<>(loc.getAllValves());
+        if (name.equals("STOCK") && !valves.isEmpty()) {
+            valves.clear();
+        }
         
         // Si la grúa está en movimiento y transporta una válvula que está en esta ubicación,
         // ocultarla hasta que la animación termine completamente

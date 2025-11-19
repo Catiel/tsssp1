@@ -15,6 +15,7 @@ public class SimulationEngine {
     private PriorityBlockingQueue<Event> eventQueue;
     private double currentTime;
     private final double endTime;
+    private final int weeksToSimulate;
     private boolean isRunning;
     private boolean isPaused;
     private int animationSpeed = 50; // Default medium speed (1-100)
@@ -34,16 +35,19 @@ public class SimulationEngine {
     private int dockToAlmacenMoves;
     private double lastOperationalTime;
     private double lastSampleTime;
+    private int completedInventoryCount;
 
     // Configuration
     private static final double SAMPLE_INTERVAL = 1.0; // Sample stats every hour
     private static final double SAMPLE_EPSILON = 1e-6;
-    private static final int WEEKS_TO_SIMULATE = 8;
+    private static final int DEFAULT_WEEKS_TO_SIMULATE = 8;
+    private static final double HOURS_PER_WEEK = 168.0;
 
     public SimulationEngine() {
+        Config config = Config.getInstance();
+
         this.eventQueue = new PriorityBlockingQueue<>();
         this.currentTime = 0.0;
-        this.endTime = WEEKS_TO_SIMULATE * 168.0; // 8 weeks in hours
         this.isRunning = false;
         this.isPaused = false;
 
@@ -58,6 +62,18 @@ public class SimulationEngine {
         this.dockToAlmacenMoves = 0;
         this.lastOperationalTime = 0.0;
         this.lastSampleTime = 0.0;
+        this.completedInventoryCount = 0;
+
+        int configuredWeeks = config.getSimulationWeeks();
+        this.weeksToSimulate = configuredWeeks > 0 ? configuredWeeks : DEFAULT_WEEKS_TO_SIMULATE;
+
+        int firstWorkingHour = shiftCalendar.getFirstWorkingHourOfWeek();
+        int lastWorkingHourExclusive = shiftCalendar.getLastWorkingHourExclusive();
+        double weeklySpan = Math.max(0.0, lastWorkingHourExclusive - firstWorkingHour);
+        if (weeklySpan <= 0.0) {
+            weeklySpan = HOURS_PER_WEEK;
+        }
+        this.endTime = ((weeksToSimulate - 1) * HOURS_PER_WEEK) + weeklySpan;
 
         initializeLocations();
         initializeCrane();
@@ -125,10 +141,10 @@ public class SimulationEngine {
     }
 
     private void scheduleArrivals() {
-        // Schedule arrivals every 168 hours (weekly) for 8 weeks
+        // Schedule arrivals every 168 hours (weekly)
         // CRÍTICO: Las válvulas llegan TODAS AL INICIO de cada semana
-        for (int week = 0; week < WEEKS_TO_SIMULATE; week++) {
-            double arrivalTime = week * 168.0;
+        for (int week = 0; week < weeksToSimulate; week++) {
+            double arrivalTime = week * HOURS_PER_WEEK;
 
             // Ajustar al primer turno laboral de la semana
             if (!shiftCalendar.isWorkingTime(arrivalTime)) {
@@ -167,9 +183,6 @@ public class SimulationEngine {
         lastSampleTime = 0.0;
 
         while (!eventQueue.isEmpty() && currentTime < endTime && isRunning) {
-            if (lastOperationalTime > 0.0 && !hasOperationalEvents()) {
-                break;
-            }
 
             if (isPaused) {
                 try {
@@ -182,9 +195,9 @@ public class SimulationEngine {
             
             // ESPERAR mientras la animación de la grúa está en progreso
             // Esto hace que la simulación se RALENTICE para que la animación sea visible
-            if (crane.isMoving()) {
+            if (crane.isMoving() && animationSpeed < 100) {
                 try {
-                    Thread.sleep(50); // Esperar 50ms y revisar de nuevo
+                    Thread.sleep(getAnimationWaitMillis());
                     continue;
                 } catch (InterruptedException e) {
                     break;
@@ -194,7 +207,7 @@ public class SimulationEngine {
             Event event = eventQueue.poll();
             if (event != null) {
                 currentTime = event.getTime();
-                if (isOperationalEvent(event.getType())) {
+                if (isOperationalEvent(event)) {
                     lastOperationalTime = currentTime;
                 }
                 processEvent(event);
@@ -209,7 +222,7 @@ public class SimulationEngine {
             Event event = eventQueue.poll();
             if (event != null) {
                 currentTime = event.getTime();
-                if (isOperationalEvent(event.getType())) {
+                if (isOperationalEvent(event)) {
                     lastOperationalTime = currentTime;
                 }
                 processEvent(event);
@@ -237,11 +250,13 @@ public class SimulationEngine {
                 break;
             case END_CRANE_MOVE:
                 // Esperar a que la animación termine antes de procesar
-                while (crane.isMoving()) {
-                    try {
-                        Thread.sleep(50);
-                    } catch (InterruptedException e) {
-                        break;
+                if (animationSpeed < 100) {
+                    while (crane.isMoving()) {
+                        try {
+                            Thread.sleep(getAnimationWaitMillis());
+                        } catch (InterruptedException e) {
+                            break;
+                        }
                     }
                 }
                 handleEndCraneMove(event.getValve(), (String) event.getData());
@@ -259,6 +274,7 @@ public class SimulationEngine {
     private void handleArrival(Valve valve) {
         Location dock = locations.get("DOCK");
         dock.addToQueue(valve);
+        updateLocationMetrics(dock);
         valve.setState(Valve.State.IN_QUEUE);
         valve.setCurrentLocation(dock);
         valve.startWaiting(currentTime); // Comenzar a contar tiempo de espera
@@ -282,10 +298,8 @@ public class SimulationEngine {
         if (machineUnit != null) {
             String unitName = machineUnit.getName();
             String machineBaseName = unitName.contains(".") ? unitName.substring(0, unitName.indexOf(".")) : unitName;
-            LocationStats machineStats = statistics.getLocationStats(machineBaseName);
-            if (machineStats != null) {
-                machineStats.incrementValvesProcessed();
-            }
+            LocationStats machineStats = statistics.getOrCreateLocationStats(machineBaseName);
+            machineStats.incrementValvesProcessed();
         }
 
         // Verificar si hay espacio en destino ANTES de liberar máquina
@@ -303,6 +317,7 @@ public class SimulationEngine {
         // Destino tiene espacio: remover de la máquina
         if (machineUnit != null) {
             machineUnit.removeValve(valve);
+            updateLocationMetrics(machineUnit);
         }
 
         // Machine unit holds the valve temporarily; crane will pick it up
@@ -367,8 +382,10 @@ public class SimulationEngine {
             nextValve.endWaiting(currentTime);
             
             almacen.removeValve(nextValve);
+            updateLocationMetrics(almacen);
             availableUnit.addToQueue(nextValve);
             availableUnit.moveToProcessing(nextValve);
+            updateLocationMetrics(availableUnit);
 
             double processTime = nextValve.getCurrentProcessingTime();
             nextValve.startProcessing(currentTime);
@@ -424,6 +441,7 @@ public class SimulationEngine {
                     } else {
                         // Si está en máquina, preparar para transporte
                         location.removeValve(valve);
+                        updateLocationMetrics(location);
                         valve.setCurrentLocation(location);
                         valve.startWaiting(currentTime);
                         pendingCraneTransfers.add(valve);
@@ -635,6 +653,7 @@ public class SimulationEngine {
         Location from = valve.getCurrentLocation();
         if (from != null) {
             from.removeValve(valve);
+            updateLocationMetrics(from);
         }
         
         // Finalizar tiempo de espera
@@ -656,14 +675,18 @@ public class SimulationEngine {
         
         if (destination.equals("STOCK")) {
             destLoc.addToQueue(valve);
+            updateLocationMetrics(destLoc);
             destLoc.removeValve(valve); // Act as sink so it doesn't retain inventory
+            updateLocationMetrics(destLoc);
             valve.setState(Valve.State.COMPLETED);
             valve.setCurrentLocation(null);
             completedValves.add(valve);
             statistics.recordCompletion(valve, currentTime);
+            completedInventoryCount++;
         } else if (destination.startsWith("Almacen")) {
             // Crane drops valve at storage
             destLoc.addToQueue(valve);
+            updateLocationMetrics(destLoc);
             valve.setState(Valve.State.IN_QUEUE);
             valve.setCurrentLocation(destLoc);
 
@@ -699,9 +722,6 @@ public class SimulationEngine {
     }
 
     private void sampleStatisticsAt(double sampleTime) {
-        double referenceTime = Math.max(0.0, sampleTime - SAMPLE_EPSILON);
-        boolean workingHour = shiftCalendar.isWorkingTime(referenceTime);
-
         for (Location loc : locations.values()) {
             String name = loc.getName();
             if (isMachineParent(name)) {
@@ -709,8 +729,7 @@ public class SimulationEngine {
             }
 
             // Almacenes y unidades individuales dependen de turno
-            boolean shiftDependent = isMachineUnit(name) || isAlmacen(name);
-            boolean countTowardsSchedule = shiftDependent ? workingHour : true;
+            boolean countTowardsSchedule = shouldCountTowardsSchedule(name, sampleTime);
 
             loc.updateStatistics(sampleTime, countTowardsSchedule);
             statistics.updateLocationStats(name,
@@ -779,36 +798,102 @@ public class SimulationEngine {
 
     private boolean hasOperationalEvents() {
         for (Event pending : eventQueue) {
-            if (isOperationalEvent(pending.getType())) {
+            if (isOperationalEvent(pending)) {
                 return true;
             }
         }
         return false;
     }
 
-    private boolean isOperationalEvent(Event.Type type) {
-        switch (type) {
+    private boolean isOperationalEvent(Event event) {
+        if (event == null) {
+            return false;
+        }
+
+        switch (event.getType()) {
             case ARRIVAL:
             case END_PROCESSING:
             case START_CRANE_MOVE:
             case END_CRANE_MOVE:
-            case SHIFT_START:
                 return true;
+            case SHIFT_START:
+                return hasPendingWorkForShift(event);
             default:
                 return false;
         }
     }
 
+    private boolean shouldCountTowardsSchedule(String name, double time) {
+        if (isMachineUnit(name)) {
+            double referenceTime = Math.max(0.0, time - SAMPLE_EPSILON);
+            return shiftCalendar.isWorkingTime(referenceTime);
+        }
+        return true;
+    }
+
+    private void updateLocationMetrics(Location location) {
+        if (location == null) {
+            return;
+        }
+        boolean countTowardsSchedule = shouldCountTowardsSchedule(location.getName(), currentTime);
+        location.updateStatistics(currentTime, countTowardsSchedule);
+    }
+
+    private boolean hasPendingWorkForShift(Event event) {
+        Object data = event.getData();
+        if (!(data instanceof String)) {
+            return false;
+        }
+
+        String name = (String) data;
+        if ("CRANE".equals(name)) {
+            if (!pendingCraneTransfers.isEmpty()) {
+                return true;
+            }
+
+            Location dock = locations.get("DOCK");
+            if (dock != null) {
+                for (Valve valve : dock.getAllValves()) {
+                    String destination = getNextDestination(valve);
+                    Location destLoc = destination != null ? locations.get(destination) : null;
+                    if (destLoc != null && destLoc.canAccept()) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        Location almacen = locations.get("Almacen_" + name);
+        if (almacen != null && almacen.getQueueSize() > 0) {
+            return true;
+        }
+
+        Location machineParent = locations.get(name);
+        if (machineParent != null) {
+            int unitCount = machineParent.getUnits();
+            for (int i = 1; i <= unitCount; i++) {
+                Location unit = locations.get(name + "." + i);
+                if (unit != null && (unit.getQueueSize() > 0 || unit.getProcessingSize() > 0)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     private void finalizeStatistics() {
-        if (lastOperationalTime <= 0.0) {
+        double finalTime = Math.max(lastSampleTime, lastOperationalTime);
+        if (finalTime <= 0.0) {
             return;
         }
 
-        if (lastOperationalTime > lastSampleTime + SAMPLE_EPSILON) {
-            sampleStatisticsAt(lastOperationalTime);
+        if (finalTime > lastSampleTime + SAMPLE_EPSILON) {
+            sampleStatisticsAt(finalTime);
         }
 
-        currentTime = lastOperationalTime;
+        currentTime = finalTime;
     }
 
     // Control methods
@@ -829,6 +914,7 @@ public class SimulationEngine {
         dockToAlmacenMoves = 0;
         lastOperationalTime = 0.0;
         lastSampleTime = 0.0;
+        completedInventoryCount = 0;
     }
 
     // Getters
@@ -850,6 +936,28 @@ public class SimulationEngine {
     public PathNetwork getPathNetwork() { return pathNetwork; }
     public int getDockToAlmacenMoves() { return dockToAlmacenMoves; }
     public boolean hasPendingEvents() { return !eventQueue.isEmpty(); }
+    public int getCompletedInventoryCount() { return completedInventoryCount; }
+    public double getLastOperationalTime() { return lastOperationalTime; }
+
+    public boolean isSimulationComplete() {
+        if (currentTime >= endTime - SAMPLE_EPSILON) {
+            return true;
+        }
+        return eventQueue.isEmpty();
+    }
+
+    private long getAnimationWaitMillis() {
+        if (animationSpeed >= 90) {
+            return 2;
+        }
+        if (animationSpeed >= 70) {
+            return 6;
+        }
+        if (animationSpeed >= 40) {
+            return 20;
+        }
+        return 50;
+    }
 
     // Debug helper to inspect valves remaining in a given location (e.g., DOCK)
     public List<String> getValveDetailsForLocation(String locationName) {

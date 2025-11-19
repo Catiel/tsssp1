@@ -36,6 +36,11 @@ public class Config {
         machine.m1.units=1
         machine.m2.units=1
         machine.m3.units=1
+
+        # Machine statistics scaling (default equals actual installed units)
+        machine.m1.stats_units=10
+        machine.m2.stats_units=25
+        machine.m3.stats_units=17
         
         # Valve Arrivals (weekly)
         arrival.valvula1.quantity=10

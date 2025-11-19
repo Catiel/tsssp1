@@ -18,12 +18,15 @@ public class DebugMain {
 
     public static void main(String[] args) {
         SimulationEngine engine = new SimulationEngine();
+        engine.setAnimationSpeed(100);
         engine.run();
 
         double currentTime = engine.getCurrentTime();
+        double lastOperational = engine.getLastOperationalTime();
         Config config = Config.getInstance();
 
         System.out.println("Tiempo simulado (hrs): " + FORMATTER.format(currentTime));
+        System.out.println("Ultimo evento operativo (hrs): " + FORMATTER.format(lastOperational));
         System.out.println("Nombre | Tiempo Programado (Hr) | Capacidad | Total Entradas | Tiempo por entrada Promedio (Min) | Contenido Promedio | Contenido Máximo | Contenido Actual | % Utilización");
 
         printLocation(engine, "DOCK", currentTime);

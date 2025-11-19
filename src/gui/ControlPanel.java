@@ -157,7 +157,7 @@ public class ControlPanel extends JPanel {
 
             // Run simulation in background thread with speed control
             simulationThread = new Thread(() -> {
-                while (isRunning && engine.getCurrentTime() < engine.getEndTime()) {
+                while (isRunning && !engine.isSimulationComplete()) {
                     if (!engine.isPaused()) {
                         // Execute one simulation step
                         engine.step();
@@ -174,13 +174,15 @@ public class ControlPanel extends JPanel {
                         } else if (speed <= 50) {
                             delay = 50 - (speed - 20); // 50ms a 20ms
                         } else if (speed <= 80) {
-                            delay = 20 - ((speed - 50) / 3); // 20ms a 10ms
+                            delay = Math.max(5, 20 - ((speed - 50) / 2)); // 20ms a 5ms
                         } else {
-                            delay = Math.max(1, 10 - ((speed - 80) / 5)); // 10ms a 1ms
+                            delay = Math.max(0, 5 - ((speed - 80) / 4)); // 5ms a 0ms
                         }
 
                         try {
-                            Thread.sleep(delay);
+                            if (delay > 0) {
+                                Thread.sleep(delay);
+                            }
                         } catch (InterruptedException e) {
                             break;
                         }
@@ -197,7 +199,7 @@ public class ControlPanel extends JPanel {
                 // Simulation completed or stopped
                 SwingUtilities.invokeLater(() -> {
                     stopSimulation();
-                    if (engine.getCurrentTime() >= engine.getEndTime()) {
+                    if (engine.isSimulationComplete()) {
                         JOptionPane.showMessageDialog(ControlPanel.this,
                             "Simulacion finalizada!\n\n" +
                             "Tiempo total: " + String.format("%.2f horas", engine.getCurrentTime()) +
@@ -280,7 +282,12 @@ public class ControlPanel extends JPanel {
         weekLabel.setText(String.format("Semana %d - %s - %02d:%02d",
             week, day, hour, minute));
 
-        double progress = (time / engine.getEndTime()) * 100;
+        double progress;
+        if (engine.isSimulationComplete()) {
+            progress = 100.0;
+        } else {
+            progress = (time / engine.getEndTime()) * 100;
+        }
         progressBar.setValue((int)progress);
         progressBar.setString(String.format("%.1f%%", progress));
     }

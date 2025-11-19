@@ -60,6 +60,10 @@ public class Statistics {
         return locationStats.get(name);
     }
 
+    public LocationStats getOrCreateLocationStats(String name) {
+        return locationStats.computeIfAbsent(name, LocationStats::new);
+    }
+
     public ResourceStats getCraneStats() {
         return craneStats;
     }
