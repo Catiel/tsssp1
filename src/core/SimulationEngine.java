@@ -190,7 +190,7 @@ public class SimulationEngine {
         lastOperationalTime = 0.0;
         lastSampleTime = 0.0;
 
-        while (!eventQueue.isEmpty() && currentTime < endTime && isRunning) {
+        while (!eventQueue.isEmpty() && isRunning && (currentTime < endTime || hasOperationalEvents())) {
 
             if (isPaused) {
                 try {
@@ -226,7 +226,15 @@ public class SimulationEngine {
     }
 
     public void step() {
-        if (!eventQueue.isEmpty() && currentTime < endTime) {
+        if (!eventQueue.isEmpty()) {
+            Event nextEvent = eventQueue.peek();
+            if (nextEvent == null) {
+                return;
+            }
+            if (currentTime >= endTime && !isOperationalEvent(nextEvent)) {
+                finalizeStatistics();
+                return;
+            }
             Event event = eventQueue.poll();
             if (event != null) {
                 currentTime = event.getTime();
@@ -1030,10 +1038,15 @@ public class SimulationEngine {
     public double getLastOperationalTime() { return lastOperationalTime; }
 
     public boolean isSimulationComplete() {
-        if (currentTime >= endTime - SAMPLE_EPSILON) {
+        if (eventQueue.isEmpty()) {
             return true;
         }
-        return eventQueue.isEmpty();
+
+        if (currentTime < endTime - SAMPLE_EPSILON) {
+            return false;
+        }
+
+        return !hasOperationalEvents();
     }
 
     private long getAnimationWaitMillis() {

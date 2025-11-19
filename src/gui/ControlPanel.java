@@ -247,6 +247,8 @@ public class ControlPanel extends JPanel {
         pauseButton.setText("Pausa");
         stepButton.setEnabled(true);
         statusLabel.setText("Estado: Detenido");
+        updateDisplay();
+        mainFrame.updateAllPanels();
     }
 
     private void resetSimulation() {
