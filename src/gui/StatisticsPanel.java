@@ -40,6 +40,11 @@ public class StatisticsPanel extends JPanel {
         layoutComponents();
     }
 
+    public void setEngine(SimulationEngine engine) {
+        this.engine = engine;
+        updateStatistics();
+    }
+
     private void initializeComponents() {
         // Entity Statistics Table
         String[] entityColumns = {"Nombre", "Total Salidas", "Cantidad actual En Sistema",

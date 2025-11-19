@@ -14,6 +14,7 @@ public class ControlPanel extends JPanel {
     private JButton pauseButton;
     private JButton stepButton;
     private JButton resetButton;
+    private JButton configButton;
     private JLabel timeLabel;
     private JLabel weekLabel;
     private JLabel statusLabel;
@@ -46,6 +47,7 @@ public class ControlPanel extends JPanel {
         pauseButton = createStyledButton("Pausa", new Color(255, 152, 0));
         stepButton = createStyledButton("Paso", new Color(33, 150, 243));
         resetButton = createStyledButton("Reiniciar", new Color(244, 67, 54));
+        configButton = createStyledButton("Parametros", new Color(63, 81, 181));
 
         pauseButton.setEnabled(false);
 
@@ -84,6 +86,7 @@ public class ControlPanel extends JPanel {
         pauseButton.addActionListener(e -> pauseSimulation());
         stepButton.addActionListener(e -> stepSimulation());
         resetButton.addActionListener(e -> resetSimulation());
+        configButton.addActionListener(e -> openConfigurationDialog());
     }
 
     private JButton createStyledButton(String text, Color color) {
@@ -105,6 +108,7 @@ public class ControlPanel extends JPanel {
         buttonPanel.add(pauseButton);
         buttonPanel.add(stepButton);
         buttonPanel.add(resetButton);
+        buttonPanel.add(configButton);
 
         // Info panel
         JPanel infoPanel = new JPanel(new GridLayout(3, 1, 5, 5));
@@ -273,6 +277,22 @@ public class ControlPanel extends JPanel {
         Logger.getInstance().info("Simulation reset");
     }
 
+    private void openConfigurationDialog() {
+        if (isRunning) {
+            int choice = JOptionPane.showConfirmDialog(this,
+                "La simulacion se detendra para modificar parametros. Continuar?",
+                "Modificar parametros",
+                JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.WARNING_MESSAGE);
+            if (choice != JOptionPane.OK_OPTION) {
+                return;
+            }
+            stopSimulation();
+        }
+
+        mainFrame.showConfigurationDialog();
+    }
+
     private void updateDisplay() {
         double time = engine.getCurrentTime();
         int week = engine.getShiftCalendar().getWeekNumber(time);
@@ -292,5 +312,15 @@ public class ControlPanel extends JPanel {
         }
         progressBar.setValue((int)progress);
         progressBar.setString(String.format("%.1f%%", progress));
+    }
+
+    public void setEngine(SimulationEngine newEngine) {
+        stopSimulation();
+        this.engine = newEngine;
+        engine.setAnimationSpeed(speedSlider.getValue());
+        progressBar.setValue(0);
+        progressBar.setString("0%");
+        statusLabel.setText("Estado: Listo");
+        updateDisplay();
     }
 }

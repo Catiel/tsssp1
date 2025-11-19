@@ -6,6 +6,7 @@ import utils.Localization;
 import javax.swing.*;
 import javax.swing.Timer;
 import java.awt.*;
+import java.awt.geom.AffineTransform;
 import java.util.*;
 import java.util.List;
 
@@ -13,13 +14,27 @@ public class AnimationPanel extends JPanel {
     private SimulationEngine engine;
     private Map<String, Point> locationPositions;
     private Timer animationTimer;
+    private double zoomFactor = 1.0;
+    private static final double MIN_ZOOM = 0.5;
+    private static final double MAX_ZOOM = 2.5;
+    private static final double ZOOM_STEP = 0.1;
+
     public AnimationPanel(SimulationEngine engine) {
         this.engine = engine;
         setBackground(new Color(245, 248, 252));
         setPreferredSize(new Dimension(1100, 650));
+        setFocusable(true);
 
         initializeLayout();
         startAnimation();
+
+        addMouseWheelListener(e -> {
+            double rotation = -e.getPreciseWheelRotation();
+            if (Math.abs(rotation) < 1e-6) {
+                return;
+            }
+            adjustZoom(rotation * ZOOM_STEP);
+        });
     }
 
     private void initializeLayout() {
@@ -54,6 +69,33 @@ public class AnimationPanel extends JPanel {
         }
     }
 
+    private void adjustZoom(double delta) {
+        double newZoom = zoomFactor + delta;
+        if (newZoom < MIN_ZOOM) {
+            newZoom = MIN_ZOOM;
+        } else if (newZoom > MAX_ZOOM) {
+            newZoom = MAX_ZOOM;
+        }
+
+        if (Math.abs(newZoom - zoomFactor) > 1e-6) {
+            zoomFactor = newZoom;
+            repaint();
+        }
+    }
+
+    public void setEngine(SimulationEngine newEngine) {
+        this.engine = newEngine;
+        refreshLocationPositions();
+    }
+
+    private int getMachineUnitCount(String baseName) {
+        int count = 0;
+        while (engine.getLocations().containsKey(baseName + "." + (count + 1))) {
+            count++;
+        }
+        return count;
+    }
+
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
@@ -64,6 +106,13 @@ public class AnimationPanel extends JPanel {
 
         refreshLocationPositions();
 
+        AffineTransform originalTransform = g2d.getTransform();
+        double centerX = getWidth() / 2.0;
+        double centerY = getHeight() / 2.0;
+        g2d.translate(centerX, centerY);
+        g2d.scale(zoomFactor, zoomFactor);
+        g2d.translate(-centerX, -centerY);
+
         // Draw network paths and nodes
         drawNetwork(g2d);
 
@@ -73,17 +122,16 @@ public class AnimationPanel extends JPanel {
         drawLocation(g2d, "Almacen_M1");
         drawLocation(g2d, "Almacen_M2");
         drawLocation(g2d, "Almacen_M3");
-        
+
         // Draw machine groups with their individual units
-        drawMachineGroup(g2d, "M1", 10);
-        drawMachineGroup(g2d, "M2", 25);
-        drawMachineGroup(g2d, "M3", 17);
+        drawMachineGroup(g2d, "M1", getMachineUnitCount("M1"));
+        drawMachineGroup(g2d, "M2", getMachineUnitCount("M2"));
+        drawMachineGroup(g2d, "M3", getMachineUnitCount("M3"));
 
         // Draw crane (must be AFTER locations so it's on top)
         drawCrane(g2d);
 
-        // Draw info
-        drawInfo(g2d);
+        g2d.setTransform(originalTransform);
     }
 
     private void drawNetwork(Graphics2D g2d) {
@@ -269,6 +317,9 @@ public class AnimationPanel extends JPanel {
     }
 
     private void drawMachineGroup(Graphics2D g2d, String baseName, int unitCount) {
+        if (unitCount <= 0) {
+            return;
+        }
         // Obtener posición del grupo
         Location parentLoc = engine.getLocations().get(baseName);
         if (parentLoc == null) return;
@@ -288,7 +339,9 @@ public class AnimationPanel extends JPanel {
             if (unit != null) {
                 int procSize = unit.getProcessingSize();
                 int qSize = unit.getQueueSize();
-                if (procSize > 0) activeUnits++;
+                if (procSize > 0) {
+                    activeUnits++;
+                }
                 totalValves += unit.getCurrentContents();
                 queuedValves += qSize;
                 processingValves += procSize;
@@ -438,53 +491,5 @@ public class AnimationPanel extends JPanel {
         String label = crane.isBusy() ? "OCUPADA" : "LIBRE";
         FontMetrics fm = g2d.getFontMetrics();
         g2d.drawString(label, x - fm.stringWidth(label)/2, y - 12);
-    }
-
-    private void drawInfo(Graphics2D g2d) {
-        g2d.setColor(new Color(255, 255, 255, 240));
-        g2d.fillRoundRect(20, 20, 280, 180, 12, 12);
-        g2d.setColor(new Color(100, 120, 180));
-        g2d.setStroke(new BasicStroke(2.5f));
-        g2d.drawRoundRect(20, 20, 280, 180, 12, 12);
-
-        g2d.setColor(Color.BLACK);
-        g2d.setFont(new Font("Arial", Font.BOLD, 13));
-        g2d.drawString("Estado del Sistema", 35, 42);
-
-        g2d.setFont(new Font("Monospaced", Font.PLAIN, 10));
-        double time = engine.getCurrentTime();
-        int week = (int)(time / 168.0) + 1;
-        g2d.drawString(String.format("Tiempo: %.1f hrs (Sem %d)", time, week), 35, 62);
-        g2d.drawString("En Sistema: " + engine.getTotalValvesInSystem(), 35, 80);
-        g2d.drawString("Completadas: " + engine.getCompletedValves().size(), 35, 98);
-        
-        // Producción por semana
-        int completadas = engine.getCompletedValves().size();
-        double semanas = Math.max(1, time / 168.0);
-        double produccionSemanal = completadas / semanas;
-        g2d.drawString(String.format("Prod/Semana: %.1f", produccionSemanal), 35, 116);
-        
-        g2d.drawString("Viajes Grua: " + engine.getCrane().getTotalTrips(), 35, 134);
-        
-        // Estado de máquinas
-        g2d.setFont(new Font("Arial", Font.BOLD, 10));
-        g2d.drawString("Maquinas Activas:", 35, 154);
-        g2d.setFont(new Font("Monospaced", Font.PLAIN, 10));
-        String machineStatus = String.format("M1:%d M2:%d M3:%d",
-            getActiveMachines("M1", 10),
-            getActiveMachines("M2", 25),
-            getActiveMachines("M3", 17));
-        g2d.drawString(machineStatus, 35, 170);
-    }
-
-    private int getActiveMachines(String baseName, int count) {
-        int active = 0;
-        for (int i = 1; i <= count; i++) {
-            Location unit = engine.getLocations().get(baseName + "." + i);
-            if (unit != null && unit.getProcessingSize() > 0) {
-                active++;
-            }
-        }
-        return active;
     }
 }

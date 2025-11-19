@@ -2,6 +2,7 @@ package gui;
 
 import core.SimulationEngine;
 import utils.Logger;
+
 import javax.swing.*;
 import java.awt.*;
 
@@ -105,5 +106,20 @@ public class MainFrame extends JFrame {
 
     public StatisticsPanel getStatisticsPanel() {
         return statisticsPanel;
+    }
+
+    public void showConfigurationDialog() {
+        SimulationConfigDialog dialog = new SimulationConfigDialog(this);
+        dialog.setVisible(true);
+    }
+
+    public void reloadSimulationEngine() {
+        Logger.getInstance().info("Reloading simulation with updated parameters");
+        engine = new SimulationEngine();
+        simulationPanel.setEngine(engine);
+        controlPanel.setEngine(engine);
+        chartsPanel.setEngine(engine);
+        statisticsPanel.setEngine(engine);
+        updateAllPanels();
     }
 }

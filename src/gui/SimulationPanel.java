@@ -27,6 +27,12 @@ public class SimulationPanel extends JPanel {
         layoutComponents();
     }
 
+    public void setEngine(SimulationEngine engine) {
+        this.engine = engine;
+        animationPanel.setEngine(engine);
+        updateDisplay();
+    }
+
     private void initializeComponents() {
         animationPanel = new AnimationPanel(engine);
         statsPanel = createStatsPanel();

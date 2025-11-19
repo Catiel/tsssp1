@@ -40,6 +40,11 @@ public class ChartsPanel extends JPanel {
         layoutCharts();
     }
 
+    public void setEngine(SimulationEngine engine) {
+        this.engine = engine;
+        clearDatasets();
+    }
+
     private void initializeCharts() {
         // Entity Progress Chart
         entityDataset = new XYSeriesCollection();
@@ -201,6 +206,22 @@ public class ChartsPanel extends JPanel {
         updateUtilizationBars();
     }
 
+    private void clearDatasets() {
+        for (int i = 0; i < entityDataset.getSeriesCount(); i++) {
+            entityDataset.getSeries(i).clear();
+        }
+        for (int i = 0; i < utilizationDataset.getSeriesCount(); i++) {
+            utilizationDataset.getSeries(i).clear();
+        }
+        for (int i = 0; i < wipDataset.getSeriesCount(); i++) {
+            wipDataset.getSeries(i).clear();
+        }
+        for (int i = 0; i < craneDataset.getSeriesCount(); i++) {
+            craneDataset.getSeries(i).clear();
+        }
+        utilizationBarDataset.clear();
+    }
+
     private void updateEntityProgress() {
         Statistics stats = engine.getStatistics();
         double currentTime = engine.getCurrentTime();
@@ -219,15 +240,11 @@ public class ChartsPanel extends JPanel {
     private void updateMachineUtilization() {
         double currentTime = engine.getCurrentTime();
 
-        Map<String, Integer> groupSizes = Map.of(
-            "M1", 10,
-            "M2", 25,
-            "M3", 17
-        );
-
-        for (Map.Entry<String, Integer> entry : groupSizes.entrySet()) {
-            String machineName = entry.getKey();
-            int unitCount = entry.getValue();
+        for (String machineName : Arrays.asList("M1", "M2", "M3")) {
+            int unitCount = getMachineUnitCount(machineName);
+            if (unitCount <= 0) {
+                continue;
+            }
             String displayName = Localization.getLocationDisplayName(machineName);
             XYSeries series = utilizationDataset.getSeries(displayName);
 
@@ -280,12 +297,16 @@ public class ChartsPanel extends JPanel {
         }
 
         // Update machine groups (sum of all units)
-        updateMachineGroupWIP("M1", 10, currentTime);
-        updateMachineGroupWIP("M2", 25, currentTime);
-        updateMachineGroupWIP("M3", 17, currentTime);
+        updateMachineGroupWIP("M1", currentTime);
+        updateMachineGroupWIP("M2", currentTime);
+        updateMachineGroupWIP("M3", currentTime);
     }
 
-    private void updateMachineGroupWIP(String baseName, int unitCount, double currentTime) {
+    private void updateMachineGroupWIP(String baseName, double currentTime) {
+        int unitCount = getMachineUnitCount(baseName);
+        if (unitCount <= 0) {
+            return;
+        }
         int totalContents = 0;
         for (int i = 1; i <= unitCount; i++) {
             model.Location unit = engine.getLocations().get(baseName + "." + i);
@@ -321,16 +342,12 @@ public class ChartsPanel extends JPanel {
         
         double currentTime = engine.getCurrentTime();
         
-        Map<String, Integer> groupSizes = Map.of(
-            "M1", 10,
-            "M2", 25,
-            "M3", 17
-        );
-        
         // Agregar datos para cada máquina
-        for (Map.Entry<String, Integer> entry : groupSizes.entrySet()) {
-            String machineName = entry.getKey();
-            int unitCount = entry.getValue();
+        for (String machineName : Arrays.asList("M1", "M2", "M3")) {
+            int unitCount = getMachineUnitCount(machineName);
+            if (unitCount <= 0) {
+                continue;
+            }
             String displayName = Localization.getLocationDisplayName(machineName);
             
             // Calcular utilización
@@ -368,5 +385,17 @@ public class ChartsPanel extends JPanel {
                 utilizationBarDataset.addValue(utilization, "Utilización", displayName);
             }
         }
+    }
+
+    private int getMachineUnitCount(String baseName) {
+        int count = 0;
+        while (engine.getLocations().containsKey(baseName + "." + (count + 1))) {
+            count++;
+        }
+        if (count == 0) {
+            utils.Config config = utils.Config.getInstance();
+            return config.getMachineUnits(baseName.toLowerCase(Locale.ROOT));
+        }
+        return count;
     }
 }
