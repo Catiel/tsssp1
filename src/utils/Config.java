@@ -210,7 +210,7 @@ public class Config {
     }
 
     public int getLocationCapacity(String locationName) {
-        String key = "location." + locationName.toLowerCase().replace("_", "") + ".capacity";
+        String key = "location." + normalizeLocationKey(locationName) + ".capacity";
         return getInt(key, 1);
     }
 
@@ -279,6 +279,17 @@ public class Config {
 
     public String getUITheme() {
         return getString("ui.theme", "dark");
+    }
+
+    public double getLocationStatsScale(String locationName, double defaultValue) {
+        String key = "location." + normalizeLocationKey(locationName) + ".stats_scale";
+        return getDouble(key, defaultValue);
+    }
+
+    private String normalizeLocationKey(String locationName) {
+        return locationName.toLowerCase()
+            .replace(" ", "")
+            .replace(".", "");
     }
 
     public String getLoggingLevel() {

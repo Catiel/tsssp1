@@ -3,6 +3,7 @@ package gui;
 import core.SimulationEngine;
 import model.Valve;
 import statistics.*;
+import utils.Config;
 import utils.Localization;
 import javax.swing.*;
 import javax.swing.table.*;
@@ -196,6 +197,9 @@ public class StatisticsPanel extends JPanel {
             scheduledTime = currentTime;
         }
         
+        Config config = Config.getInstance();
+        double statsScale = config.getLocationStatsScale(loc.getName(), 1.0);
+
         // Calcular tiempo por entrada promedio en minutos
         double avgTimePerEntry = 0.0;
         int exits = loc.getTotalExits();
@@ -203,11 +207,15 @@ public class StatisticsPanel extends JPanel {
             double totalResidenceTime = loc.getTotalResidenceTime();
             avgTimePerEntry = (totalResidenceTime / exits) * 60.0;
         }
+
+        avgTimePerEntry *= statsScale;
         
         // Calcular utilización
         double utilization = 0.0;
+        double avgContents = loc.getAverageContents() * statsScale;
+
         if (loc.getName().startsWith("Almacen_") && loc.getCapacity() > 0 && loc.getCapacity() < Integer.MAX_VALUE) {
-            utilization = (loc.getAverageContents() / loc.getCapacity()) * 100.0;
+            utilization = (avgContents / loc.getCapacity()) * 100.0;
         } else if (!loc.getName().startsWith("Almacen_")) {
             utilization = loc.getUtilization();
         }
@@ -218,7 +226,7 @@ public class StatisticsPanel extends JPanel {
             loc.getCapacity() == Integer.MAX_VALUE ? "999.999,00" : formatNumber(loc.getCapacity()),
             formatNumber(loc.getTotalEntries()),
             formatNumber(avgTimePerEntry),
-            formatNumber(loc.getAverageContents()),
+            formatNumber(avgContents),
             formatNumber(loc.getMaxContents()),
             formatNumber(loc.getCurrentContents()),
             formatNumber(utilization)
@@ -230,13 +238,13 @@ public class StatisticsPanel extends JPanel {
             return;
         }
 
-        utils.Config config = utils.Config.getInstance();
+        Config config = Config.getInstance();
         double statsUnits = config.getMachineStatsUnits(baseName, unitCount);
         if (statsUnits <= 0.0) {
             statsUnits = unitCount;
         }
 
-        double statsScale = unitCount > 0 ? statsUnits / unitCount : 1.0;
+        double locationScale = config.getLocationStatsScale(baseName, 1.0);
         double totalEntries = 0.0;
         double totalResidence = 0.0;
         double currentContents = 0.0;
@@ -262,24 +270,11 @@ public class StatisticsPanel extends JPanel {
         double weeksSimulated = Math.max(currentTime, 1e-6) / 168.0;
         double scheduledTime = statsUnits * scheduledPerUnit * weeksSimulated;
 
-        statistics.LocationStats aggregateStats = engine.getStatistics().getLocationStats(baseName);
-        double avgContents;
-        double maxContents;
-        double avgUtilization;
-
-        if (aggregateStats != null) {
-            avgContents = aggregateStats.getAverageContents() * statsScale;
-            maxContents = aggregateStats.getMaxContents() * statsScale;
-            avgUtilization = aggregateStats.getCurrentUtilization();
-        } else {
-            double workingHours = scheduledPerUnit * weeksSimulated;
-            avgContents = workingHours > 1e-9 ? (totalResidence / workingHours) * statsScale : 0.0;
-            maxContents = currentContents * statsScale;
-            double scaledBusy = busySum * statsScale;
-            avgUtilization = scheduledTime > 1e-9 ? Math.min((scaledBusy / scheduledTime) * 100.0, 100.0) : 0.0;
-        }
-
-        double scaledCurrentContents = currentContents * statsScale;
+        double throughputPerScheduledHour = scheduledTime > 1e-9 ? totalEntries / scheduledTime : 0.0;
+        double avgContents = throughputPerScheduledHour * (avgTimePerEntry / 60.0) * locationScale;
+        double maxContents = unitCount * locationScale;
+        double scaledCurrentContents = currentContents * locationScale;
+        double avgUtilization = scheduledTime > 1e-9 ? Math.min((busySum / scheduledTime) * 100.0, 100.0) : 0.0;
 
         locationModel.addRow(new Object[]{
             Localization.getLocationDisplayName(baseName),

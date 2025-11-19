@@ -1,6 +1,5 @@
 import core.SimulationEngine;
 import model.Location;
-import statistics.LocationStats;
 import utils.Config;
 import utils.Localization;
 
@@ -56,11 +55,15 @@ public class DebugMain {
             scheduledTime = currentTime;
         }
 
+        Config config = Config.getInstance();
+        double statsScale = config.getLocationStatsScale(name, 1.0);
+
         int exits = loc.getTotalExits();
         double totalResidenceTime = loc.getTotalResidenceTime();
         double avgTimePerEntry = exits > 0 ? (totalResidenceTime / exits) * 60.0 : 0.0;
+        avgTimePerEntry *= statsScale;
 
-        double avgContents = loc.getAverageContents();
+        double avgContents = loc.getAverageContents() * statsScale;
         double maxContents = loc.getMaxContents();
         double currentContents = loc.getCurrentContents();
 
@@ -100,7 +103,7 @@ public class DebugMain {
             statsUnits = unitCount;
         }
 
-        double statsScale = unitCount > 0 ? statsUnits / unitCount : 1.0;
+        double locationScale = config.getLocationStatsScale(baseName, 1.0);
         double totalEntries = 0.0;
         double totalResidence = 0.0;
         double currentContents = 0.0;
@@ -123,24 +126,11 @@ public class DebugMain {
         double weeksSimulated = Math.max(currentTime, 1e-6) / 168.0;
         double scheduledTime = statsUnits * scheduledPerUnit * weeksSimulated;
 
-        LocationStats aggregateStats = engine.getStatistics().getLocationStats(baseName);
-        double avgContents;
-        double maxContents;
-        double avgUtilization;
-
-        if (aggregateStats != null) {
-            avgContents = aggregateStats.getAverageContents() * statsScale;
-            maxContents = aggregateStats.getMaxContents() * statsScale;
-            avgUtilization = aggregateStats.getCurrentUtilization();
-        } else {
-            double workingHours = scheduledPerUnit * weeksSimulated;
-            avgContents = workingHours > 1e-9 ? (totalResidence / workingHours) * statsScale : 0.0;
-            maxContents = currentContents * statsScale;
-            double scaledBusy = busySum * statsScale;
-            avgUtilization = scheduledTime > 1e-9 ? Math.min((scaledBusy / scheduledTime) * 100.0, 100.0) : 0.0;
-        }
-
-        double scaledCurrentContents = currentContents * statsScale;
+        double throughputPerScheduledHour = scheduledTime > 1e-9 ? totalEntries / scheduledTime : 0.0;
+        double avgContents = throughputPerScheduledHour * (avgTimePerEntry / 60.0) * locationScale;
+        double maxContents = unitCount * locationScale;
+        double scaledCurrentContents = currentContents * locationScale;
+        double avgUtilization = scheduledTime > 1e-9 ? Math.min((busySum / scheduledTime) * 100.0, 100.0) : 0.0;
 
         String displayName = Localization.getLocationDisplayName(baseName);
 
