@@ -5593,3 +5593,170 @@ java.util.ConcurrentModificationException
 [2025-11-18 22:18:50.278] [INFO] [Logger-Thread] Main frame displayed
 [2025-11-18 22:18:52.115] [INFO] [Logger-Thread] Simulation started
 [2025-11-18 22:19:44.984] [INFO] [Logger-Thread] Simulation paused
+[2025-11-18 22:21:09.064] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 22:21:09.067] [INFO] [Logger-Thread] Logger configured from Config: level=INFO
+[2025-11-18 22:21:09.067] [INFO] [Logger-Thread] Starting Valve Manufacturing Simulation...
+[2025-11-18 22:21:09.550] [INFO] [Logger-Thread] FlatLaf Dark theme loaded
+[2025-11-18 22:21:09.642] [INFO] [Logger-Thread] Initializing main frame...
+[2025-11-18 22:21:09.670] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 22:21:09.892] [INFO] [Logger-Thread] Control panel initialized
+[2025-11-18 22:21:10.242] [INFO] [Logger-Thread] Main frame initialized successfully
+[2025-11-18 22:21:10.522] [INFO] [Logger-Thread] Main frame displayed
+[2025-11-18 22:21:13.685] [INFO] [Logger-Thread] Simulation started
+[2025-11-18 22:27:33.365] [INFO] [Logger-Thread] Simulation completed successfully
+[2025-11-18 22:36:49.668] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 22:36:49.668] [INFO] [Logger-Thread] Logger configured from Config: level=INFO
+[2025-11-18 22:36:49.668] [INFO] [Logger-Thread] Starting Valve Manufacturing Simulation...
+[2025-11-18 22:36:50.018] [INFO] [Logger-Thread] FlatLaf Dark theme loaded
+[2025-11-18 22:36:50.099] [INFO] [Logger-Thread] Initializing main frame...
+[2025-11-18 22:36:50.107] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 22:36:50.332] [INFO] [Logger-Thread] Control panel initialized
+[2025-11-18 22:36:50.584] [INFO] [Logger-Thread] Main frame initialized successfully
+[2025-11-18 22:36:50.829] [INFO] [Logger-Thread] Main frame displayed
+[2025-11-18 22:36:53.799] [INFO] [Logger-Thread] Simulation started
+[2025-11-18 22:41:28.455] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 22:42:40.454] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 22:42:40.455] [INFO] [Logger-Thread] Logger configured from Config: level=INFO
+[2025-11-18 22:42:40.455] [INFO] [Logger-Thread] Starting Valve Manufacturing Simulation...
+[2025-11-18 22:42:40.774] [INFO] [Logger-Thread] FlatLaf Dark theme loaded
+[2025-11-18 22:42:40.865] [INFO] [Logger-Thread] Initializing main frame...
+[2025-11-18 22:42:40.897] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 22:42:41.140] [INFO] [Logger-Thread] Control panel initialized
+[2025-11-18 22:42:41.607] [INFO] [Logger-Thread] Main frame initialized successfully
+[2025-11-18 22:42:41.981] [INFO] [Logger-Thread] Main frame displayed
+[2025-11-18 22:42:44.089] [INFO] [Logger-Thread] Simulation started
+[2025-11-18 22:50:07.513] [INFO] [Logger-Thread] Simulation completed successfully
+[2025-11-18 22:54:46.591] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 22:54:46.591] [INFO] [Logger-Thread] Logger configured from Config: level=INFO
+[2025-11-18 22:54:46.591] [INFO] [Logger-Thread] Starting Valve Manufacturing Simulation...
+[2025-11-18 22:54:46.817] [INFO] [Logger-Thread] FlatLaf Dark theme loaded
+[2025-11-18 22:54:46.890] [INFO] [Logger-Thread] Initializing main frame...
+[2025-11-18 22:54:46.899] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 22:54:47.077] [INFO] [Logger-Thread] Control panel initialized
+[2025-11-18 22:54:47.277] [INFO] [Logger-Thread] Main frame initialized successfully
+[2025-11-18 22:54:47.535] [INFO] [Logger-Thread] Main frame displayed
+[2025-11-18 22:54:51.047] [INFO] [Logger-Thread] Simulation started
+[2025-11-18 22:59:11.564] [ERROR] [Logger-Thread] Error updating panels
+java.util.ConcurrentModificationException
+	at java.base/java.util.ArrayList$ArrayListSpliterator.forEachRemaining(ArrayList.java:1631)
+	at java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:509)
+	at java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:499)
+	at java.base/java.util.stream.ReduceOps$ReduceOp.evaluateSequential(ReduceOps.java:921)
+	at java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:234)
+	at java.base/java.util.stream.DoublePipeline.collect(DoublePipeline.java:541)
+	at java.base/java.util.stream.DoublePipeline.average(DoublePipeline.java:493)
+	at statistics.ResourceStats.getAverageUtilization(ResourceStats.java:25)
+	at statistics.ResourceStats.getReport(ResourceStats.java:38)
+	at statistics.Statistics.generateReport(Statistics.java:162)
+	at gui.StatisticsPanel.updateSummary(StatisticsPanel.java:307)
+	at gui.StatisticsPanel.updateStatistics(StatisticsPanel.java:150)
+	at gui.MainFrame.updateAllPanels(MainFrame.java:92)
+	at gui.ControlPanel.lambda$5(ControlPanel.java:142)
+	at java.desktop/javax.swing.Timer.fireActionPerformed(Timer.java:311)
+	at java.desktop/javax.swing.Timer$DoPostEvent.run(Timer.java:243)
+	at java.desktop/java.awt.event.InvocationEvent.dispatch(InvocationEvent.java:318)
+	at java.desktop/java.awt.EventQueue.dispatchEventImpl(EventQueue.java:771)
+	at java.desktop/java.awt.EventQueue$4.run(EventQueue.java:722)
+	at java.desktop/java.awt.EventQueue$4.run(EventQueue.java:716)
+	at java.base/java.security.AccessController.doPrivileged(AccessController.java:399)
+	at java.base/java.security.ProtectionDomain$JavaSecurityAccessImpl.doIntersectionPrivilege(ProtectionDomain.java:86)
+	at java.desktop/java.awt.EventQueue.dispatchEvent(EventQueue.java:741)
+	at java.desktop/java.awt.EventDispatchThread.pumpOneEventForFilters(EventDispatchThread.java:203)
+	at java.desktop/java.awt.EventDispatchThread.pumpEventsForFilter(EventDispatchThread.java:124)
+	at java.desktop/java.awt.EventDispatchThread.pumpEventsForHierarchy(EventDispatchThread.java:113)
+	at java.desktop/java.awt.EventDispatchThread.pumpEvents(EventDispatchThread.java:109)
+	at java.desktop/java.awt.EventDispatchThread.pumpEvents(EventDispatchThread.java:101)
+	at java.desktop/java.awt.EventDispatchThread.run(EventDispatchThread.java:90)
+[2025-11-18 23:01:16.575] [INFO] [Logger-Thread] Simulation completed successfully
+[2025-11-18 23:02:35.612] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 23:02:35.612] [INFO] [Logger-Thread] Logger configured from Config: level=INFO
+[2025-11-18 23:02:35.612] [INFO] [Logger-Thread] Starting Valve Manufacturing Simulation...
+[2025-11-18 23:02:36.078] [INFO] [Logger-Thread] FlatLaf Dark theme loaded
+[2025-11-18 23:02:36.173] [INFO] [Logger-Thread] Initializing main frame...
+[2025-11-18 23:02:36.205] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 23:02:36.400] [INFO] [Logger-Thread] Control panel initialized
+[2025-11-18 23:02:36.739] [INFO] [Logger-Thread] Main frame initialized successfully
+[2025-11-18 23:02:37.071] [INFO] [Logger-Thread] Main frame displayed
+[2025-11-18 23:05:02.639] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 23:05:02.639] [INFO] [Logger-Thread] Logger configured from Config: level=INFO
+[2025-11-18 23:05:02.639] [INFO] [Logger-Thread] Starting Valve Manufacturing Simulation...
+[2025-11-18 23:05:02.957] [INFO] [Logger-Thread] FlatLaf Dark theme loaded
+[2025-11-18 23:05:03.051] [INFO] [Logger-Thread] Initializing main frame...
+[2025-11-18 23:05:03.057] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 23:05:03.208] [INFO] [Logger-Thread] Control panel initialized
+[2025-11-18 23:05:03.473] [INFO] [Logger-Thread] Main frame initialized successfully
+[2025-11-18 23:05:03.748] [INFO] [Logger-Thread] Main frame displayed
+[2025-11-18 23:05:06.140] [INFO] [Logger-Thread] Simulation started
+[2025-11-18 23:07:25.794] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 23:07:25.794] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 23:08:39.693] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 23:08:49.624] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 23:08:49.624] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 23:10:52.911] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 23:11:11.394] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 23:11:11.394] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 23:11:14.596] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 23:16:32.428] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 23:16:32.428] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 23:17:20.427] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 23:18:32.368] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 23:18:32.374] [INFO] [Logger-Thread] Logger configured from Config: level=INFO
+[2025-11-18 23:18:32.374] [INFO] [Logger-Thread] Starting Valve Manufacturing Simulation...
+[2025-11-18 23:18:33.000] [INFO] [Logger-Thread] FlatLaf Dark theme loaded
+[2025-11-18 23:18:33.041] [INFO] [Logger-Thread] Initializing main frame...
+[2025-11-18 23:18:33.048] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 23:18:33.133] [INFO] [Logger-Thread] Control panel initialized
+[2025-11-18 23:18:33.275] [INFO] [Logger-Thread] Main frame initialized successfully
+[2025-11-18 23:18:33.408] [INFO] [Logger-Thread] Main frame displayed
+[2025-11-18 23:18:34.962] [INFO] [Logger-Thread] Simulation started
+[2025-11-18 23:24:34.568] [INFO] [Logger-Thread] Simulation completed successfully
+[2025-11-18 23:35:44.281] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 23:35:44.281] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 23:37:04.671] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 23:37:56.273] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 23:37:56.273] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 23:39:16.996] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 23:39:59.416] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 23:39:59.416] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 23:46:08.896] [INFO] [Logger-Thread] Logger shutting down...
+[2025-11-18 23:46:50.521] [INFO] [Logger-Thread] Logger initialized
+[2025-11-18 23:46:50.521] [INFO] [Logger-Thread] Logger configured from Config: level=INFO
+[2025-11-18 23:46:50.521] [INFO] [Logger-Thread] Starting Valve Manufacturing Simulation...
+[2025-11-18 23:46:50.706] [INFO] [Logger-Thread] FlatLaf Dark theme loaded
+[2025-11-18 23:46:50.745] [INFO] [Logger-Thread] Initializing main frame...
+[2025-11-18 23:46:50.753] [INFO] [Logger-Thread] Shift calendar initialized: 1 blocks, 5 working days
+[2025-11-18 23:46:50.832] [INFO] [Logger-Thread] Control panel initialized
+[2025-11-18 23:46:50.979] [INFO] [Logger-Thread] Main frame initialized successfully
+[2025-11-18 23:46:51.118] [INFO] [Logger-Thread] Main frame displayed
+[2025-11-18 23:46:52.654] [INFO] [Logger-Thread] Simulation started
+[2025-11-18 23:50:58.490] [ERROR] [Logger-Thread] Error updating panels
+java.util.ConcurrentModificationException
+	at java.base/java.util.ArrayList$ArrayListSpliterator.forEachRemaining(ArrayList.java:1631)
+	at java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:509)
+	at java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:499)
+	at java.base/java.util.stream.ReduceOps$ReduceOp.evaluateSequential(ReduceOps.java:921)
+	at java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:234)
+	at java.base/java.util.stream.DoublePipeline.collect(DoublePipeline.java:541)
+	at java.base/java.util.stream.DoublePipeline.average(DoublePipeline.java:493)
+	at statistics.ResourceStats.getAverageUtilization(ResourceStats.java:25)
+	at statistics.ResourceStats.getReport(ResourceStats.java:38)
+	at statistics.Statistics.generateReport(Statistics.java:162)
+	at gui.StatisticsPanel.updateSummary(StatisticsPanel.java:317)
+	at gui.StatisticsPanel.updateStatistics(StatisticsPanel.java:150)
+	at gui.MainFrame.updateAllPanels(MainFrame.java:92)
+	at gui.ControlPanel.lambda$5(ControlPanel.java:142)
+	at java.desktop/javax.swing.Timer.fireActionPerformed(Timer.java:311)
+	at java.desktop/javax.swing.Timer$DoPostEvent.run(Timer.java:243)
+	at java.desktop/java.awt.event.InvocationEvent.dispatch(InvocationEvent.java:318)
+	at java.desktop/java.awt.EventQueue.dispatchEventImpl(EventQueue.java:771)
+	at java.desktop/java.awt.EventQueue$4.run(EventQueue.java:722)
+	at java.desktop/java.awt.EventQueue$4.run(EventQueue.java:716)
+	at java.base/java.security.AccessController.doPrivileged(AccessController.java:399)
+	at java.base/java.security.ProtectionDomain$JavaSecurityAccessImpl.doIntersectionPrivilege(ProtectionDomain.java:86)
+	at java.desktop/java.awt.EventQueue.dispatchEvent(EventQueue.java:741)
+	at java.desktop/java.awt.EventDispatchThread.pumpOneEventForFilters(EventDispatchThread.java:203)
+	at java.desktop/java.awt.EventDispatchThread.pumpEventsForFilter(EventDispatchThread.java:124)
+	at java.desktop/java.awt.EventDispatchThread.pumpEventsForHierarchy(EventDispatchThread.java:113)
+	at java.desktop/java.awt.EventDispatchThread.pumpEvents(EventDispatchThread.java:109)
+	at java.desktop/java.awt.EventDispatchThread.pumpEvents(EventDispatchThread.java:101)
+	at java.desktop/java.awt.EventDispatchThread.run(EventDispatchThread.java:90)

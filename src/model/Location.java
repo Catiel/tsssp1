@@ -20,6 +20,8 @@ public class Location {
     private double totalBlockedTime;
     private double lastUpdateTime;
     private double totalObservedTime;
+    private double cumulativeContentTime;
+    private int lastSampleContents;
     private List<Integer> contentHistory;
     private List<Double> timeHistory;
 
@@ -36,6 +38,8 @@ public class Location {
         this.totalBlockedTime = 0;
         this.lastUpdateTime = 0;
         this.totalObservedTime = 0;
+        this.cumulativeContentTime = 0;
+        this.lastSampleContents = 0;
         this.contentHistory = Collections.synchronizedList(new ArrayList<>());
         this.timeHistory = Collections.synchronizedList(new ArrayList<>());
     }
@@ -79,6 +83,10 @@ public class Location {
             deltaTime = 0;
         }
 
+        if (deltaTime > 0) {
+            cumulativeContentTime += lastSampleContents * deltaTime;
+        }
+
         if (!timeHistory.isEmpty()) {
             double lastTime = timeHistory.get(timeHistory.size() - 1);
             if (Math.abs(currentTime - lastTime) < 1e-9) {
@@ -98,9 +106,11 @@ public class Location {
             totalObservedTime += deltaTime;
         }
 
-        contentHistory.add(getCurrentContents());
+        int currentContents = getCurrentContents();
+        contentHistory.add(currentContents);
         timeHistory.add(currentTime);
 
+        lastSampleContents = currentContents;
         lastUpdateTime = currentTime;
     }
 
@@ -129,12 +139,14 @@ public class Location {
     }
 
     public synchronized double getAverageContents() {
-        if (contentHistory.isEmpty()) return 0;
-        List<Integer> snapshot = new ArrayList<>(contentHistory);
-        return snapshot.stream()
-            .mapToInt(Integer::intValue)
-            .average()
-            .orElse(0.0);
+        if (timeHistory.size() < 2) {
+            return 0.0;
+        }
+        double totalTime = timeHistory.get(timeHistory.size() - 1) - timeHistory.get(0);
+        if (totalTime <= 1e-9) {
+            return 0.0;
+        }
+        return cumulativeContentTime / totalTime;
     }
 
     public synchronized double getMaxContents() {
@@ -154,23 +166,7 @@ public class Location {
     }
 
     public synchronized double getTotalResidenceTime() {
-        // Calcular la integral del contenido a lo largo del tiempo
-        // usando el método del trapecio
-        if (contentHistory.size() < 2 || timeHistory.size() < 2) {
-            return 0.0;
-        }
-        
-        List<Integer> contents = new ArrayList<>(contentHistory);
-        List<Double> times = new ArrayList<>(timeHistory);
-        
-        double totalArea = 0.0;
-        for (int i = 1; i < Math.min(contents.size(), times.size()); i++) {
-            double deltaTime = times.get(i) - times.get(i-1);
-            double avgContent = (contents.get(i) + contents.get(i-1)) / 2.0;
-            totalArea += avgContent * deltaTime;
-        }
-        
-        return totalArea;
+        return cumulativeContentTime;
     }
 
     // Getters

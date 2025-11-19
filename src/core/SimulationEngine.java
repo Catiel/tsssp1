@@ -32,6 +32,8 @@ public class SimulationEngine {
     private List<Valve> allValves;
     private List<Valve> completedValves;
     private int dockToAlmacenMoves;
+    private double lastOperationalTime;
+    private double lastSampleTime;
 
     // Configuration
     private static final double SAMPLE_INTERVAL = 1.0; // Sample stats every hour
@@ -54,6 +56,8 @@ public class SimulationEngine {
         this.allValves = Collections.synchronizedList(new ArrayList<>());
         this.completedValves = Collections.synchronizedList(new ArrayList<>());
         this.dockToAlmacenMoves = 0;
+        this.lastOperationalTime = 0.0;
+        this.lastSampleTime = 0.0;
 
         initializeLocations();
         initializeCrane();
@@ -159,8 +163,14 @@ public class SimulationEngine {
     public void run() {
         isRunning = true;
         isPaused = false;
+        lastOperationalTime = 0.0;
+        lastSampleTime = 0.0;
 
         while (!eventQueue.isEmpty() && currentTime < endTime && isRunning) {
+            if (lastOperationalTime > 0.0 && !hasOperationalEvents()) {
+                break;
+            }
+
             if (isPaused) {
                 try {
                     Thread.sleep(100);
@@ -184,9 +194,14 @@ public class SimulationEngine {
             Event event = eventQueue.poll();
             if (event != null) {
                 currentTime = event.getTime();
+                if (isOperationalEvent(event.getType())) {
+                    lastOperationalTime = currentTime;
+                }
                 processEvent(event);
             }
         }
+
+        finalizeStatistics();
     }
 
     public void step() {
@@ -194,8 +209,15 @@ public class SimulationEngine {
             Event event = eventQueue.poll();
             if (event != null) {
                 currentTime = event.getTime();
+                if (isOperationalEvent(event.getType())) {
+                    lastOperationalTime = currentTime;
+                }
                 processEvent(event);
             }
+        }
+
+        if (eventQueue.isEmpty() || !hasOperationalEvents()) {
+            finalizeStatistics();
         }
     }
 
@@ -490,16 +512,16 @@ public class SimulationEngine {
         if (dock == null || dock.getQueueSize() == 0) {
             return null;
         }
-        
+
         // Buscar PRIMERA válvula cuyo destino tenga espacio (ProModel FIRST 1)
         for (Valve valve : dock.getAllValves()) {
             String destination = getNextDestination(valve);
             Location destLoc = destination != null ? locations.get(destination) : null;
-            
+
             if (destination == null) {
                 continue;
             }
-            
+
             // CRÍTICO: Verificar espacio ANTES de saltarse por estar bloqueada
             if (destLoc != null && destLoc.canAccept()) {
                 // Si estaba bloqueada, desbloquear
@@ -516,7 +538,7 @@ public class SimulationEngine {
                 }
             }
         }
-        
+
         return null; // Todas bloqueadas o sin destino válido
     }
 
@@ -634,8 +656,9 @@ public class SimulationEngine {
         
         if (destination.equals("STOCK")) {
             destLoc.addToQueue(valve);
+            destLoc.removeValve(valve); // Act as sink so it doesn't retain inventory
             valve.setState(Valve.State.COMPLETED);
-            valve.setCurrentLocation(destLoc);
+            valve.setCurrentLocation(null);
             completedValves.add(valve);
             statistics.recordCompletion(valve, currentTime);
         } else if (destination.startsWith("Almacen")) {
@@ -672,7 +695,10 @@ public class SimulationEngine {
     }
 
     private void sampleStatistics() {
-        double sampleTime = currentTime;
+        sampleStatisticsAt(currentTime);
+    }
+
+    private void sampleStatisticsAt(double sampleTime) {
         double referenceTime = Math.max(0.0, sampleTime - SAMPLE_EPSILON);
         boolean workingHour = shiftCalendar.isWorkingTime(referenceTime);
 
@@ -703,6 +729,8 @@ public class SimulationEngine {
             crane.getUtilization(),
             crane.getTotalTrips(),
             sampleTime);
+
+        lastSampleTime = sampleTime;
     }
 
     private boolean isMachineParent(String name) {
@@ -749,6 +777,40 @@ public class SimulationEngine {
         statistics.updateLocationStats(machineBaseName, totalContents, utilization, sampleTime);
     }
 
+    private boolean hasOperationalEvents() {
+        for (Event pending : eventQueue) {
+            if (isOperationalEvent(pending.getType())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isOperationalEvent(Event.Type type) {
+        switch (type) {
+            case ARRIVAL:
+            case END_PROCESSING:
+            case START_CRANE_MOVE:
+            case END_CRANE_MOVE:
+            case SHIFT_START:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private void finalizeStatistics() {
+        if (lastOperationalTime <= 0.0) {
+            return;
+        }
+
+        if (lastOperationalTime > lastSampleTime + SAMPLE_EPSILON) {
+            sampleStatisticsAt(lastOperationalTime);
+        }
+
+        currentTime = lastOperationalTime;
+    }
+
     // Control methods
     public void pause() { isPaused = true; }
     public void resume() { isPaused = false; }
@@ -765,6 +827,8 @@ public class SimulationEngine {
         scheduleArrivals();
         scheduleStatisticsSampling();
         dockToAlmacenMoves = 0;
+        lastOperationalTime = 0.0;
+        lastSampleTime = 0.0;
     }
 
     // Getters

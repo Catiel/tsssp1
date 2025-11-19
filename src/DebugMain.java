@@ -1,161 +1,150 @@
 import core.SimulationEngine;
-import model.Valve;
-import statistics.EntityStats;
-import statistics.Statistics;
+import model.Location;
+import statistics.LocationStats;
 import utils.Config;
+import utils.Localization;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
+import java.text.NumberFormat;
+import java.util.Locale;
 
 public class DebugMain {
+    private static final Locale LOCALE = new Locale("es", "ES");
+    private static final NumberFormat FORMATTER = NumberFormat.getNumberInstance(LOCALE);
+
+    static {
+        FORMATTER.setMinimumFractionDigits(2);
+        FORMATTER.setMaximumFractionDigits(2);
+    }
+
     public static void main(String[] args) {
         SimulationEngine engine = new SimulationEngine();
         engine.run();
 
-        System.out.println("Tiempo simulado: " + engine.getCurrentTime());
-        System.out.println("Valvulas completadas: " + engine.getCompletedValves().size());
-        System.out.println("Valvulas en DOCK: " + engine.getLocations().get("DOCK").getCurrentContents());
-        System.out.println("Almacen M1: " + engine.getLocations().get("Almacen_M1").getCurrentContents());
-        System.out.println("Almacen M2: " + engine.getLocations().get("Almacen_M2").getCurrentContents());
-        System.out.println("Almacen M3: " + engine.getLocations().get("Almacen_M3").getCurrentContents());
-        System.out.println("Movimientos DOCK->Almacen: " + engine.getDockToAlmacenMoves());
-        double time = engine.getCurrentTime();
-        System.out.println("Viajes totales grua: " + engine.getCrane().getTotalTrips());
-        System.out.println("Utilizacion grua: " + engine.getCrane().getUtilization());
-        System.out.println("Tiempo trabajo grua: " + engine.getCrane().getTotalUsageTime());
-        double scheduledHours = engine.getShiftCalendar().getTotalWorkingHoursPerWeek() * Math.ceil(time / 168.0);
-        System.out.println("Horas de turno programadas: " + scheduledHours);
+        double currentTime = engine.getCurrentTime();
+        Config config = Config.getInstance();
 
-        Statistics statistics = engine.getStatistics();
-        int weeks = (int)Math.ceil(time / 168.0);
-        List<Double> allCompletionTimes = new ArrayList<>();
-        for (EntityStats entityStats : statistics.getAllEntityStats().values()) {
-                System.out.println(entityStats.getType().getDisplayName() + " completadas: " + entityStats.getTotalCompleted());
-            allCompletionTimes.addAll(entityStats.getCompletionTimes());
-        }
-        Collections.sort(allCompletionTimes);
+        System.out.println("Tiempo simulado (hrs): " + FORMATTER.format(currentTime));
+        System.out.println("Nombre | Tiempo Programado (Hr) | Capacidad | Total Entradas | Tiempo por entrada Promedio (Min) | Contenido Promedio | Contenido Máximo | Contenido Actual | % Utilización");
 
-        for (int week = 0; week < weeks; week++) {
-            double start = week * 168.0;
-            double end = Math.min((week + 1) * 168.0, time);
-            int completedWeek = 0;
-            for (EntityStats entityStats : statistics.getAllEntityStats().values()) {
-                for (double completionTime : entityStats.getCompletionTimes()) {
-                    if (completionTime >= start && completionTime < end) {
-                        completedWeek++;
-                    }
-                }
-            }
-            System.out.println("Semana " + (week + 1) + " completadas: " + completedWeek);
+        printLocation(engine, "DOCK", currentTime);
+        printLocation(engine, "STOCK", currentTime);
+        printLocation(engine, "Almacen_M1", currentTime);
+        printLocation(engine, "Almacen_M2", currentTime);
+        printLocation(engine, "Almacen_M3", currentTime);
+
+        printMachineGroup(engine, "M1", config.getMachineUnits("m1"), currentTime);
+        printMachineGroup(engine, "M2", config.getMachineUnits("m2"), currentTime);
+        printMachineGroup(engine, "M3", config.getMachineUnits("m3"), currentTime);
+    }
+
+    private static void printLocation(SimulationEngine engine, String name, double currentTime) {
+        Location loc = engine.getLocations().get(name);
+        if (loc == null) {
+            return;
         }
-        double shiftStart = 6.0;
-        for (int week = 0; week < weeks; week++) {
-            double start = shiftStart + week * 168.0;
-            double end = Math.min(start + 168.0, time);
-            int completedShiftWeek = 0;
-            for (EntityStats entityStats : statistics.getAllEntityStats().values()) {
-                for (double completionTime : entityStats.getCompletionTimes()) {
-                    if (completionTime >= start && completionTime < end) {
-                        completedShiftWeek++;
-                    }
-                }
-            }
-            System.out.println("Semana (turno) " + (week + 1) + " completadas: " + completedShiftWeek);
+
+        double scheduledTime = loc.getTotalObservedTime();
+        if (scheduledTime <= 0.0) {
+            scheduledTime = currentTime;
         }
-            statistics.getArrivalsPerWeek().keySet().stream()
-                .sorted()
-                .forEach(week -> System.out.println("Semana " + week + " completadas segun arribo: " +
-                    statistics.getCompletionsForArrivalWeek(week) +
-                    " / llegadas " + statistics.getArrivalsForWeek(week)));
-        for (int i = 0; i < Math.min(10, allCompletionTimes.size()); i++) {
-            System.out.println("Completion " + (i + 1) + " at " + allCompletionTimes.get(i));
+
+        int exits = loc.getTotalExits();
+        double totalResidenceTime = loc.getTotalResidenceTime();
+        double avgTimePerEntry = exits > 0 ? (totalResidenceTime / exits) * 60.0 : 0.0;
+
+        double avgContents = loc.getAverageContents();
+        double maxContents = loc.getMaxContents();
+        double currentContents = loc.getCurrentContents();
+
+        double utilization;
+        if (name.startsWith("Almacen_") && loc.getCapacity() > 0 && loc.getCapacity() < Integer.MAX_VALUE) {
+            utilization = (avgContents / loc.getCapacity()) * 100.0;
+        } else {
+            utilization = loc.getUtilization();
         }
-        System.out.println("Completion 80 at " + (allCompletionTimes.size() >= 80 ? allCompletionTimes.get(79) : -1));
+
+        String capacityDisplay = loc.getCapacity() == Integer.MAX_VALUE
+            ? FORMATTER.format(999999)
+            : FORMATTER.format(loc.getCapacity());
+
+        String displayName = Localization.getLocationDisplayName(name);
+
+        System.out.printf("%s | %s | %s | %s | %s | %s | %s | %s | %s%n",
+            displayName,
+            FORMATTER.format(scheduledTime),
+            capacityDisplay,
+            FORMATTER.format(loc.getTotalEntries()),
+            FORMATTER.format(avgTimePerEntry),
+            FORMATTER.format(avgContents),
+            FORMATTER.format(maxContents),
+            FORMATTER.format(currentContents),
+            FORMATTER.format(utilization));
+    }
+
+    private static void printMachineGroup(SimulationEngine engine, String baseName, int unitCount, double currentTime) {
+        if (unitCount <= 0) {
+            return;
+        }
 
         Config config = Config.getInstance();
-        int m1Units = config.getMachineUnits("m1");
-        int m2Units = config.getMachineUnits("m2");
-        int m3Units = config.getMachineUnits("m3");
+        double statsUnits = config.getMachineStatsUnits(baseName, unitCount);
+        if (statsUnits <= 0.0) {
+            statsUnits = unitCount;
+        }
 
-        double m1Util = 0;
-        double m1Busy = 0;
-        double m1Observed = 0;
-        for (int i = 1; i <= m1Units; i++) {
-            var loc = engine.getLocations().get("M1." + i);
-            m1Util += loc.getUtilization();
-            m1Busy += loc.getTotalBusyTime();
-            m1Observed += loc.getTotalObservedTime();
-        }
-        double m2Util = 0;
-        double m2Busy = 0;
-        double m2Observed = 0;
-        for (int i = 1; i <= m2Units; i++) {
-            var loc = engine.getLocations().get("M2." + i);
-            m2Util += loc.getUtilization();
-            m2Busy += loc.getTotalBusyTime();
-            m2Observed += loc.getTotalObservedTime();
-        }
-        double m3Util = 0;
-        double m3Busy = 0;
-        double m3Observed = 0;
-        for (int i = 1; i <= m3Units; i++) {
-            var loc = engine.getLocations().get("M3." + i);
-            m3Util += loc.getUtilization();
-            m3Busy += loc.getTotalBusyTime();
-            m3Observed += loc.getTotalObservedTime();
-        }
-        System.out.println("Utilizacion promedio M1 unidades: " + (m1Util / m1Units));
-        System.out.println("Utilizacion promedio M2 unidades: " + (m2Util / m2Units));
-        System.out.println("Utilizacion promedio M3 unidades: " + (m3Util / m3Units));
-        System.out.println("M1 horas ocupadas: " + m1Busy + " / programadas: " + m1Observed);
-        System.out.println("M2 horas ocupadas: " + m2Busy + " / programadas: " + m2Observed);
-        System.out.println("M3 horas ocupadas: " + m3Busy + " / programadas: " + m3Observed);
-        System.out.println("M1 utilizacion (totales): " + (m1Observed > 0 ? (m1Busy / m1Observed) * 100.0 : 0.0));
-        System.out.println("M2 utilizacion (totales): " + (m2Observed > 0 ? (m2Busy / m2Observed) * 100.0 : 0.0));
-        System.out.println("M3 utilizacion (totales): " + (m3Observed > 0 ? (m3Busy / m3Observed) * 100.0 : 0.0));
+        double statsScale = unitCount > 0 ? statsUnits / unitCount : 1.0;
+        double totalEntries = 0.0;
+        double totalResidence = 0.0;
+        double currentContents = 0.0;
+        double busySum = 0.0;
 
-        System.out.println();
-        System.out.println(engine.getStatistics().generateReport(engine.getCurrentTime()));
+        for (int i = 1; i <= unitCount; i++) {
+            Location unit = engine.getLocations().get(baseName + "." + i);
+            if (unit == null) {
+                continue;
+            }
+            totalEntries += unit.getTotalEntries();
+            totalResidence += unit.getTotalResidenceTime();
+            currentContents += unit.getCurrentContents();
+            busySum += unit.getTotalBusyTime();
+        }
 
-        // Diagnostico: ejecutar solo hasta 1 semana para ver WIP remanente
-        SimulationEngine weekEngine = new SimulationEngine();
-        double cutoff = 168.0;
-        while (weekEngine.hasPendingEvents() && weekEngine.getCurrentTime() < cutoff) {
-            weekEngine.step();
-        }
-        System.out.println("\n--- Diagnostico semana 1 ---");
-        System.out.println("Tiempo alcanzado: " + weekEngine.getCurrentTime());
-        System.out.println("Completadas al corte: " + weekEngine.getCompletedValves().size());
-        List<Valve> valvesAtCutoff = weekEngine.getAllValves();
-        long arrived = valvesAtCutoff.stream()
-            .filter(v -> v.getArrivalTime() <= cutoff)
-            .count();
-        long completedAtCutoff = weekEngine.getCompletedValves().size();
-        long pending = arrived - completedAtCutoff;
-        System.out.println("Llegadas hasta el corte: " + arrived);
-        System.out.println("Completadas al corte: " + completedAtCutoff);
-        System.out.println("Pendientes reales: " + pending);
-        for (String loc : new String[]{"DOCK", "Almacen_M1", "Almacen_M2", "Almacen_M3"}) {
-            System.out.println(loc + " cola=" + weekEngine.getLocations().get(loc).getQueueSize() +
-                " proc=" + weekEngine.getLocations().get(loc).getProcessingSize());
-        }
-        long pendingM2 = valvesAtCutoff.stream()
-            .filter(v -> v.getArrivalTime() <= cutoff &&
-                v.getCurrentLocation() != null &&
-                v.getCurrentLocation().getName().startsWith("M2"))
-            .count();
-        System.out.println("Valvulas pendientes en M2/M2.x: " + pendingM2);
+        double avgTimePerEntry = totalEntries > 0 ? (totalResidence / totalEntries) * 60.0 : 0.0;
 
-        Map<String, Long> pendingByLocation = valvesAtCutoff.stream()
-            .filter(v -> v.getArrivalTime() <= cutoff && v.getState() != Valve.State.COMPLETED)
-            .collect(Collectors.groupingBy(v -> v.getCurrentLocation() == null ? "TRANSITO" : v.getCurrentLocation().getName(), Collectors.counting()));
-        pendingByLocation.forEach((loc, count) ->
-            System.out.println("Pendientes en " + loc + ": " + count));
-        for (String detail : engine.getValveDetailsForLocation("DOCK")) {
-            System.out.println(" - " + detail);
+        double scheduledPerUnit = engine.getShiftCalendar().getTotalWorkingHoursPerWeek();
+        double weeksSimulated = Math.max(currentTime, 1e-6) / 168.0;
+        double scheduledTime = statsUnits * scheduledPerUnit * weeksSimulated;
+
+        LocationStats aggregateStats = engine.getStatistics().getLocationStats(baseName);
+        double avgContents;
+        double maxContents;
+        double avgUtilization;
+
+        if (aggregateStats != null) {
+            avgContents = aggregateStats.getAverageContents() * statsScale;
+            maxContents = aggregateStats.getMaxContents() * statsScale;
+            avgUtilization = aggregateStats.getCurrentUtilization();
+        } else {
+            double workingHours = scheduledPerUnit * weeksSimulated;
+            avgContents = workingHours > 1e-9 ? (totalResidence / workingHours) * statsScale : 0.0;
+            maxContents = currentContents * statsScale;
+            double scaledBusy = busySum * statsScale;
+            avgUtilization = scheduledTime > 1e-9 ? Math.min((scaledBusy / scheduledTime) * 100.0, 100.0) : 0.0;
         }
+
+        double scaledCurrentContents = currentContents * statsScale;
+
+        String displayName = Localization.getLocationDisplayName(baseName);
+
+        System.out.printf("%s | %s | %s | %s | %s | %s | %s | %s | %s%n",
+            displayName,
+            FORMATTER.format(scheduledTime),
+            FORMATTER.format(statsUnits),
+            FORMATTER.format(totalEntries),
+            FORMATTER.format(avgTimePerEntry),
+            FORMATTER.format(avgContents),
+            FORMATTER.format(maxContents),
+            FORMATTER.format(scaledCurrentContents),
+            FORMATTER.format(avgUtilization));
     }
 }

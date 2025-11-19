@@ -7,6 +7,8 @@ import utils.Localization;
 import javax.swing.*;
 import javax.swing.table.*;
 import java.awt.*;
+import java.text.NumberFormat;
+import java.util.Locale;
 
 public class StatisticsPanel extends JPanel {
     private SimulationEngine engine;
@@ -19,6 +21,14 @@ public class StatisticsPanel extends JPanel {
     private DefaultTableModel entityModel;
     private DefaultTableModel locationModel;
     private DefaultTableModel resourceModel;
+
+    private static final Locale DISPLAY_LOCALE = new Locale("es", "ES");
+    private static final NumberFormat NUMBER_FORMAT = NumberFormat.getNumberInstance(DISPLAY_LOCALE);
+
+    static {
+        NUMBER_FORMAT.setMinimumFractionDigits(2);
+        NUMBER_FORMAT.setMaximumFractionDigits(2);
+    }
 
     public StatisticsPanel(SimulationEngine engine) {
         this.engine = engine;
@@ -181,10 +191,10 @@ public class StatisticsPanel extends JPanel {
     }
 
     private void addLocationRow(model.Location loc, double currentTime) {
-        // Calcular tiempo programado: 8 semanas × 168 horas/semana
-        utils.Config config = utils.Config.getInstance();
-        int weeksSimulated = config.getSimulationWeeks();
-        double scheduledTime = weeksSimulated * 168.0;
+        double scheduledTime = loc.getTotalObservedTime();
+        if (scheduledTime <= 0.0) {
+            scheduledTime = currentTime;
+        }
         
         // Calcular tiempo por entrada promedio en minutos
         double avgTimePerEntry = 0.0;
@@ -204,65 +214,88 @@ public class StatisticsPanel extends JPanel {
         
         locationModel.addRow(new Object[]{
             Localization.getLocationDisplayName(loc.getName()),
-            String.format("%.2f", scheduledTime),
-            loc.getCapacity() == Integer.MAX_VALUE ? "999.999,00" : String.format("%.2f", (double)loc.getCapacity()),
-            String.format("%.2f", (double)loc.getTotalEntries()),
-            String.format("%.2f", avgTimePerEntry),
-            String.format("%.2f", loc.getAverageContents()),
-            String.format("%.2f", loc.getMaxContents()),
-            String.format("%.2f", (double)loc.getCurrentContents()),
-            String.format("%.2f", utilization)
+            formatNumber(scheduledTime),
+            loc.getCapacity() == Integer.MAX_VALUE ? "999.999,00" : formatNumber(loc.getCapacity()),
+            formatNumber(loc.getTotalEntries()),
+            formatNumber(avgTimePerEntry),
+            formatNumber(loc.getAverageContents()),
+            formatNumber(loc.getMaxContents()),
+            formatNumber(loc.getCurrentContents()),
+            formatNumber(utilization)
         });
     }
 
     private void addMachineGroupRow(String baseName, int unitCount, double currentTime) {
-        int totalContents = 0;
-        int totalEntries = 0;
-        double maxContents = 0;
-        double avgContents = 0;
-        double busySum = 0;
+        if (unitCount <= 0) {
+            return;
+        }
+
+        utils.Config config = utils.Config.getInstance();
+        double statsUnits = config.getMachineStatsUnits(baseName, unitCount);
+        if (statsUnits <= 0.0) {
+            statsUnits = unitCount;
+        }
+
+        double statsScale = unitCount > 0 ? statsUnits / unitCount : 1.0;
+        double totalEntries = 0.0;
+        double totalResidence = 0.0;
+        double currentContents = 0.0;
+        double busySum = 0.0;
 
         for (int i = 1; i <= unitCount; i++) {
             model.Location unit = engine.getLocations().get(baseName + "." + i);
-            if (unit != null) {
-                totalContents += unit.getCurrentContents();
-                totalEntries += unit.getTotalEntries();
-                maxContents = Math.max(maxContents, unit.getMaxContents());
-                avgContents += unit.getAverageContents();
-                busySum += unit.getTotalBusyTime();
+            if (unit == null) {
+                continue;
             }
+            totalEntries += unit.getTotalEntries();
+            totalResidence += unit.getTotalResidenceTime();
+            currentContents += unit.getCurrentContents();
+            busySum += unit.getTotalBusyTime();
         }
-        avgContents /= unitCount;
-        
-        // Calcular utilización usando stats_units
-        utils.Config config = utils.Config.getInstance();
-        double statsUnits = config.getMachineStatsUnits(baseName, unitCount);
-        double scheduledPerUnit = engine.getShiftCalendar().getTotalWorkingHoursPerWeek();
-        double weeksSimulated = Math.max(currentTime, 1e-6) / 168.0;
-        double totalScheduled = statsUnits * scheduledPerUnit * weeksSimulated;
-        double avgUtilization = (totalScheduled > 0.0) ? (busySum / totalScheduled) * 100.0 : 0.0;
-        avgUtilization = Math.min(avgUtilization, 100.0);
-        
-        // Calcular tiempo programado
-        double scheduledTime = statsUnits * scheduledPerUnit * weeksSimulated;
-        
-        // Calcular tiempo por entrada promedio en minutos
+
         double avgTimePerEntry = 0.0;
         if (totalEntries > 0) {
-            avgTimePerEntry = (busySum / totalEntries) * 60.0;
+            avgTimePerEntry = (totalResidence / totalEntries) * 60.0;
         }
+
+        double scheduledPerUnit = engine.getShiftCalendar().getTotalWorkingHoursPerWeek();
+        double weeksSimulated = Math.max(currentTime, 1e-6) / 168.0;
+        double scheduledTime = statsUnits * scheduledPerUnit * weeksSimulated;
+
+        statistics.LocationStats aggregateStats = engine.getStatistics().getLocationStats(baseName);
+        double avgContents;
+        double maxContents;
+        double avgUtilization;
+
+        if (aggregateStats != null) {
+            avgContents = aggregateStats.getAverageContents() * statsScale;
+            maxContents = aggregateStats.getMaxContents() * statsScale;
+            avgUtilization = aggregateStats.getCurrentUtilization();
+        } else {
+            double workingHours = scheduledPerUnit * weeksSimulated;
+            avgContents = workingHours > 1e-9 ? (totalResidence / workingHours) * statsScale : 0.0;
+            maxContents = currentContents * statsScale;
+            double scaledBusy = busySum * statsScale;
+            avgUtilization = scheduledTime > 1e-9 ? Math.min((scaledBusy / scheduledTime) * 100.0, 100.0) : 0.0;
+        }
+
+        double scaledCurrentContents = currentContents * statsScale;
 
         locationModel.addRow(new Object[]{
             Localization.getLocationDisplayName(baseName),
-            String.format("%.2f", scheduledTime),
-            String.format("%.2f", (double)unitCount),
-            String.format("%.2f", (double)totalEntries),
-            String.format("%.2f", avgTimePerEntry),
-            String.format("%.2f", avgContents),
-            String.format("%.2f", maxContents),
-            String.format("%.2f", (double)totalContents),
-            String.format("%.2f", avgUtilization)
+            formatNumber(scheduledTime),
+            formatNumber(statsUnits),
+            formatNumber(totalEntries),
+            formatNumber(avgTimePerEntry),
+            formatNumber(avgContents),
+            formatNumber(maxContents),
+            formatNumber(scaledCurrentContents),
+            formatNumber(avgUtilization)
         });
+    }
+
+    private String formatNumber(double value) {
+        return NUMBER_FORMAT.format(value);
     }
 
     private void updateResourceStatistics() {
