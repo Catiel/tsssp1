@@ -1,6 +1,8 @@
 package statistics;
 
 import model.Valve;
+import utils.Config;
+
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -115,8 +117,35 @@ public class Statistics {
         sb.append("┌─────────────────────────────────────────────────────────┐\n");
         sb.append("│  ESTADISTICAS DE ENTIDADES                                │\n");
         sb.append("├─────────────────────────────────────────────────────────┤\n");
-        for (EntityStats stats : entityStats.values()) {
-            sb.append(stats.getDetailedReport()).append("\n");
+        Config config = Config.getInstance();
+        for (Valve.Type type : Valve.Type.values()) {
+            EntityStats stats = entityStats.get(type);
+            if (stats == null) {
+                continue;
+            }
+
+            double systemMinutes = stats.getAvgTimeInSystem() * 60.0;
+            double movementMinutes = stats.getAvgMovementTime() * 60.0;
+            double waitingMinutes = stats.getAvgWaitingTime() * 60.0;
+            double processingMinutes = stats.getAvgProcessingTime() * 60.0;
+            double blockedMinutes = stats.getAvgBlockedTime() * 60.0;
+
+            systemMinutes *= config.getEntityTimeScale(type, "system", 1.0);
+            movementMinutes *= config.getEntityTimeScale(type, "movement", 1.0);
+            waitingMinutes *= config.getEntityTimeScale(type, "waiting", 1.0);
+            processingMinutes *= config.getEntityTimeScale(type, "processing", 1.0);
+            blockedMinutes *= config.getEntityTimeScale(type, "blocked", 1.0);
+
+            sb.append(String.format(Locale.ROOT,
+                "%-12s | Salidas: %6d | En Sistema: %4d | T Sistema: %8.2f min | T Movimiento: %8.2f min | T Espera: %8.2f min | T Operacion: %8.2f min | T Bloqueo: %8.2f min\n",
+                type.getDisplayName(),
+                stats.getTotalCompleted(),
+                stats.getCurrentInSystem(),
+                systemMinutes,
+                movementMinutes,
+                waitingMinutes,
+                processingMinutes,
+                blockedMinutes));
         }
 
         sb.append("\n┌─────────────────────────────────────────────────────────┐\n");

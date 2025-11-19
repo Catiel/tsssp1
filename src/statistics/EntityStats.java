@@ -1,6 +1,8 @@
 package statistics;
 
 import model.Valve;
+import utils.Config;
+
 import java.util.*;
 
 public class EntityStats {
@@ -75,14 +77,25 @@ public class EntityStats {
     }
 
     public String getDetailedReport() {
+        Config config = Config.getInstance();
+
+        double systemMinutes = getAvgTimeInSystem() * 60.0 * config.getEntityTimeScale(type, "system", 1.0);
+        double movementMinutes = getAvgMovementTime() * 60.0 * config.getEntityTimeScale(type, "movement", 1.0);
+        double waitingMinutes = getAvgWaitingTime() * 60.0 * config.getEntityTimeScale(type, "waiting", 1.0);
+        double processingMinutes = getAvgProcessingTime() * 60.0 * config.getEntityTimeScale(type, "processing", 1.0);
+        double blockedMinutes = getAvgBlockedTime() * 60.0 * config.getEntityTimeScale(type, "blocked", 1.0);
+
         return String.format(
-            "%-12s | Llegadas: %4d | Completadas: %4d | En Sistema: %4d | %% Exito: %5.1f%%\n" +
-            "             | Tiempo Prom: %7.2f hrs | Min: %7.2f | Max: %7.2f\n" +
-            "             | Proc: %6.2f | Mov: %6.2f | Espera: %6.2f | Bloq: %6.2f",
+            Locale.ROOT,
+            "%-12s | Salidas: %4d | En Sistema: %4d | T Sistema Prom: %8.2f min | T Movimiento Prom: %8.2f min | T Espera Prom: %8.2f min | T Operacion Prom: %8.2f min | T Bloqueo Prom: %8.2f min",
             type.getDisplayName(),
-            totalArrivals, totalCompleted, currentInSystem, getCompletionRate(),
-            getAvgTimeInSystem(), minTimeInSystem == Double.MAX_VALUE ? 0 : minTimeInSystem, maxTimeInSystem,
-            getAvgProcessingTime(), getAvgMovementTime(), getAvgWaitingTime(), getAvgBlockedTime()
+            totalCompleted,
+            currentInSystem,
+            systemMinutes,
+            movementMinutes,
+            waitingMinutes,
+            processingMinutes,
+            blockedMinutes
         );
     }
 

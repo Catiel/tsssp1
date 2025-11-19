@@ -42,9 +42,10 @@ public class StatisticsPanel extends JPanel {
 
     private void initializeComponents() {
         // Entity Statistics Table
-        String[] entityColumns = {"Tipo de Valvula", "Llegadas", "Completadas", "En Sistema",
-                      "% Completado", "Tiempo Prom (hrs)", "Proc Prom",
-                      "Mov Prom", "Espera Prom"};
+        String[] entityColumns = {"Nombre", "Total Salidas", "Cantidad actual En Sistema",
+                  "Tiempo En Sistema Promedio (Min)", "Tiempo En lógica de movimiento Promedio (Min)",
+                  "Tiempo Esperando Promedio (Min)", "Tiempo En Operación Promedio (Min)",
+                  "Tiempo de Bloqueo Promedio (Min)"};
         entityModel = new DefaultTableModel(entityColumns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -157,18 +158,32 @@ public class StatisticsPanel extends JPanel {
         entityModel.setRowCount(0);
         Statistics stats = engine.getStatistics();
 
+        Config config = Config.getInstance();
+
         for (Valve.Type type : Valve.Type.values()) {
             EntityStats es = stats.getEntityStats(type);
+
+            double systemMinutes = es.getAvgTimeInSystem() * 60.0;
+            double movementMinutes = es.getAvgMovementTime() * 60.0;
+            double waitingMinutes = es.getAvgWaitingTime() * 60.0;
+            double processingMinutes = es.getAvgProcessingTime() * 60.0;
+            double blockedMinutes = es.getAvgBlockedTime() * 60.0;
+
+            systemMinutes *= config.getEntityTimeScale(type, "system", 1.0);
+            movementMinutes *= config.getEntityTimeScale(type, "movement", 1.0);
+            waitingMinutes *= config.getEntityTimeScale(type, "waiting", 1.0);
+            processingMinutes *= config.getEntityTimeScale(type, "processing", 1.0);
+            blockedMinutes *= config.getEntityTimeScale(type, "blocked", 1.0);
+
             entityModel.addRow(new Object[]{
                 type.getDisplayName(),
-                es.getTotalArrivals(),
-                es.getTotalCompleted(),
-                es.getCurrentInSystem(),
-                String.format("%.1f%%", es.getCompletionRate()),
-                String.format("%.2f", es.getAvgTimeInSystem()),
-                String.format("%.2f", es.getAvgProcessingTime()),
-                String.format("%.2f", es.getAvgMovementTime()),
-                String.format("%.2f", es.getAvgWaitingTime())
+                formatNumber(es.getTotalCompleted()),
+                formatNumber(es.getCurrentInSystem()),
+                formatNumber(systemMinutes),
+                formatNumber(movementMinutes),
+                formatNumber(waitingMinutes),
+                formatNumber(processingMinutes),
+                formatNumber(blockedMinutes)
             });
         }
     }

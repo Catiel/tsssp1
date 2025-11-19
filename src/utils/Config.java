@@ -3,6 +3,8 @@ package utils;
 import java.io.*;
 import java.util.*;
 
+import model.Valve;
+
 public class Config {
     private static Config instance;
     private Properties properties;
@@ -83,6 +85,28 @@ public class Config {
         stats.auto_export=false
         stats.export_interval=168
         stats.export_path=./reports/
+
+        # Entity statistics scaling (applied on top of simulated results)
+        entity.valvula1.system_scale=1.0
+        entity.valvula1.movement_scale=1.0
+        entity.valvula1.waiting_scale=1.0
+        entity.valvula1.processing_scale=1.0
+        entity.valvula1.blocked_scale=1.0
+        entity.valvula2.system_scale=1.0
+        entity.valvula2.movement_scale=1.0
+        entity.valvula2.waiting_scale=1.0
+        entity.valvula2.processing_scale=1.0
+        entity.valvula2.blocked_scale=1.0
+        entity.valvula3.system_scale=1.0
+        entity.valvula3.movement_scale=1.0
+        entity.valvula3.waiting_scale=1.0
+        entity.valvula3.processing_scale=1.0
+        entity.valvula3.blocked_scale=1.0
+        entity.valvula4.system_scale=1.0
+        entity.valvula4.movement_scale=1.0
+        entity.valvula4.waiting_scale=1.0
+        entity.valvula4.processing_scale=1.0
+        entity.valvula4.blocked_scale=1.0
         
         # UI Settings
         ui.width=1600
@@ -334,6 +358,16 @@ public class Config {
         return resourceName.toLowerCase()
             .replace(" ", "")
             .replace(".", "");
+    }
+
+    public double getEntityTimeScale(Valve.Type type, String metric, double defaultValue) {
+        String normalizedMetric = metric.toLowerCase(Locale.ROOT).trim();
+        String key = "entity." + normalizeEntityKey(type) + "." + normalizedMetric + "_scale";
+        return getDouble(key, defaultValue);
+    }
+
+    private String normalizeEntityKey(Valve.Type type) {
+        return type.name().toLowerCase(Locale.ROOT).replace("_", "");
     }
 
     public String getLoggingLevel() {

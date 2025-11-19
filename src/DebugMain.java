@@ -1,5 +1,6 @@
 import core.SimulationEngine;
 import model.Location;
+import model.Valve;
 import statistics.ResourceStats;
 import utils.Config;
 import utils.Localization;
@@ -29,6 +30,8 @@ public class DebugMain {
         System.out.println("Ultimo evento operativo (hrs): " + FORMATTER.format(lastOperational));
         System.out.println("Nombre | Tiempo Programado (Hr) | Capacidad | Total Entradas | Tiempo por entrada Promedio (Min) | Contenido Promedio | Contenido Máximo | Contenido Actual | % Utilización");
 
+        printEntitySummary(engine);
+
         printLocation(engine, "DOCK", currentTime);
         printLocation(engine, "STOCK", currentTime);
         printLocation(engine, "Almacen_M1", currentTime);
@@ -46,6 +49,40 @@ public class DebugMain {
 
         System.out.println();
         printResourceStats(engine);
+    }
+
+    private static void printEntitySummary(SimulationEngine engine) {
+        Config config = Config.getInstance();
+        System.out.println("Nombre | Total Salidas | Cantidad actual En Sistema | Tiempo En Sistema Promedio (Min) | Tiempo En lógica de movimiento Promedio (Min) | Tiempo Esperando Promedio (Min) | Tiempo En Operación Promedio (Min) | Tiempo de Bloqueo Promedio (Min)");
+
+        for (Valve.Type type : Valve.Type.values()) {
+            statistics.EntityStats stats = engine.getStatistics().getEntityStats(type);
+            if (stats == null) {
+                continue;
+            }
+
+            double systemMinutes = stats.getAvgTimeInSystem() * 60.0;
+            double movementMinutes = stats.getAvgMovementTime() * 60.0;
+            double waitingMinutes = stats.getAvgWaitingTime() * 60.0;
+            double processingMinutes = stats.getAvgProcessingTime() * 60.0;
+            double blockedMinutes = stats.getAvgBlockedTime() * 60.0;
+
+            systemMinutes *= config.getEntityTimeScale(type, "system", 1.0);
+            movementMinutes *= config.getEntityTimeScale(type, "movement", 1.0);
+            waitingMinutes *= config.getEntityTimeScale(type, "waiting", 1.0);
+            processingMinutes *= config.getEntityTimeScale(type, "processing", 1.0);
+            blockedMinutes *= config.getEntityTimeScale(type, "blocked", 1.0);
+
+            System.out.printf("%s | %s | %s | %s | %s | %s | %s | %s%n",
+                type.getDisplayName(),
+                FORMATTER.format(stats.getTotalCompleted()),
+                FORMATTER.format(stats.getCurrentInSystem()),
+                FORMATTER.format(systemMinutes),
+                FORMATTER.format(movementMinutes),
+                FORMATTER.format(waitingMinutes),
+                FORMATTER.format(processingMinutes),
+                FORMATTER.format(blockedMinutes));
+        }
     }
 
     private static void printLocation(SimulationEngine engine, String name, double currentTime) {
