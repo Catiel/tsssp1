@@ -1,7 +1,11 @@
 package model;
 
 import java.awt.Color;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import utils.Config;
 
 public class Valve {
     public enum Type {
@@ -36,6 +40,7 @@ public class Valve {
     }
 
     private static final AtomicInteger idGenerator = new AtomicInteger(1);
+    private static final Map<Integer, Double> MACHINE_TIME_MULTIPLIERS = initializeMultipliers();
 
     private final int id;
     private final Type type;
@@ -52,6 +57,8 @@ public class Valve {
     private double startProcessingTime;
     private double startWaitingTime;
     private double startBlockedTime;
+    private double readyTime;
+    private static final double READY_EPSILON = 1e-6;
 
     public Valve(Type type, double arrivalTime) {
         this.id = idGenerator.getAndIncrement();
@@ -63,6 +70,7 @@ public class Valve {
         this.totalMovementTime = 0;
         this.totalWaitingTime = 0;
         this.totalBlockedTime = 0;
+        this.readyTime = 0;
     }
 
     public String getNextMachine() {
@@ -84,7 +92,10 @@ public class Valve {
     public double getCurrentProcessingTime() {
         int[][] route = type.getRoute();
         if (currentStep < route.length) {
-            return route[currentStep][1];
+            int machineId = route[currentStep][0];
+            double baseTime = route[currentStep][1];
+            double multiplier = MACHINE_TIME_MULTIPLIERS.getOrDefault(machineId, 1.0);
+            return baseTime * multiplier;
         }
         return 0;
     }
@@ -145,6 +156,18 @@ public class Valve {
         return currentTime - arrivalTime;
     }
 
+    public void setReadyTime(double time) {
+        this.readyTime = Math.max(0.0, time);
+    }
+
+    public double getReadyTime() {
+        return readyTime;
+    }
+
+    public boolean isReady(double currentTime) {
+        return currentTime + READY_EPSILON >= readyTime;
+    }
+
     // Getters
     public int getId() { return id; }
     public Type getType() { return type; }
@@ -162,5 +185,14 @@ public class Valve {
     @Override
     public String toString() {
         return String.format("%s#%d", type.getDisplayName(), id);
+    }
+
+    private static Map<Integer, Double> initializeMultipliers() {
+        Config config = Config.getInstance();
+        Map<Integer, Double> map = new HashMap<>();
+        map.put(1, config.getMachineTimeMultiplier("m1", 1.0));
+        map.put(2, config.getMachineTimeMultiplier("m2", 1.0));
+        map.put(3, config.getMachineTimeMultiplier("m3", 1.0));
+        return map;
     }
 }

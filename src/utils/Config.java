@@ -28,6 +28,11 @@ public class Config {
         location.almacen_m1.capacity=20
         location.almacen_m2.capacity=20
         location.almacen_m3.capacity=30
+        location.dock.hold_time=0.0
+        location.stock.hold_time=0.0
+        location.almacen_m1.hold_time=0.0
+        location.almacen_m2.hold_time=0.0
+        location.almacen_m3.hold_time=0.0
         location.m1.capacity=1
         location.m2.capacity=1
         location.m3.capacity=1
@@ -41,6 +46,11 @@ public class Config {
         machine.m1.stats_units=10
         machine.m2.stats_units=25
         machine.m3.stats_units=17
+
+        # Machine processing time multipliers (1.0 = original ProModel times)
+        machine.m1.time_multiplier=1.0
+        machine.m2.time_multiplier=1.0
+        machine.m3.time_multiplier=1.0
         
         # Valve Arrivals (weekly)
         arrival.valvula1.quantity=10
@@ -211,6 +221,11 @@ public class Config {
 
     public double getMachineStatsUnits(String machineName, double defaultValue) {
         String key = "machine." + machineName.toLowerCase() + ".stats_units";
+        return getDouble(key, defaultValue);
+    }
+
+    public double getMachineTimeMultiplier(String machineName, double defaultValue) {
+        String key = "machine." + machineName.toLowerCase() + ".time_multiplier";
         return getDouble(key, defaultValue);
     }
 

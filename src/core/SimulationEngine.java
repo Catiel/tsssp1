@@ -22,6 +22,7 @@ public class SimulationEngine {
 
     // Model components
     private Map<String, Location> locations;
+    private Map<String, Double> locationHoldTimes;
     private Crane crane;
     private PathNetwork pathNetwork;
     private ShiftCalendar shiftCalendar;
@@ -52,6 +53,7 @@ public class SimulationEngine {
         this.isPaused = false;
 
         this.locations = new ConcurrentHashMap<>();
+        this.locationHoldTimes = new ConcurrentHashMap<>();
         this.pathNetwork = new PathNetwork();
         this.shiftCalendar = new ShiftCalendar();
         this.pendingMachineWakeups = ConcurrentHashMap.newKeySet();
@@ -83,6 +85,7 @@ public class SimulationEngine {
 
     private void initializeLocations() {
         Config config = Config.getInstance();
+        locationHoldTimes.clear();
         int m1Units = Math.max(1, config.getMachineUnits("m1"));
         int m2Units = Math.max(1, config.getMachineUnits("m2"));
         int m3Units = Math.max(1, config.getMachineUnits("m3"));
@@ -95,11 +98,14 @@ public class SimulationEngine {
         // Create locations with exact ProModel specifications
         locations.put("DOCK", new Location("DOCK", Integer.MAX_VALUE, 1,
             new Point(190, 140)));
+        locationHoldTimes.put("DOCK", config.getDouble("location.dock.hold_time", 0.0));
         locations.put("STOCK", new Location("STOCK", Integer.MAX_VALUE, 1,
             new Point(200, 420)));
+        locationHoldTimes.put("STOCK", config.getDouble("location.stock.hold_time", 0.0));
 
         locations.put("Almacen_M1", new Location("Almacen_M1", almacenM1Cap, 1,
             new Point(560, 520)));
+        locationHoldTimes.put("Almacen_M1", config.getDouble("location.almacen_m1.hold_time", 0.0));
         // M1 parent - SOLO para enrutamiento, no procesa válvulas
         // Capacidad 0 para que las válvulas vayan directo a M1.x
         locations.put("M1", new Location("M1", 0, m1Units,
@@ -113,6 +119,7 @@ public class SimulationEngine {
 
         locations.put("Almacen_M2", new Location("Almacen_M2", almacenM2Cap, 1,
             new Point(960, 320)));
+        locationHoldTimes.put("Almacen_M2", config.getDouble("location.almacen_m2.hold_time", 0.0));
         // M2 parent - SOLO para enrutamiento
         locations.put("M2", new Location("M2", 0, m2Units,
             new Point(760, 300)));
@@ -124,6 +131,7 @@ public class SimulationEngine {
 
         locations.put("Almacen_M3", new Location("Almacen_M3", almacenM3Cap, 1,
             new Point(1080, 180)));
+        locationHoldTimes.put("Almacen_M3", config.getDouble("location.almacen_m3.hold_time", 0.0));
         // M3 parent - SOLO para enrutamiento
         locations.put("M3", new Location("M3", 0, m3Units,
             new Point(900, 160)));
@@ -261,6 +269,9 @@ public class SimulationEngine {
                 }
                 handleEndCraneMove(event.getValve(), (String) event.getData());
                 break;
+            case HOLD_RELEASE:
+                handleHoldRelease(event.getValve(), (String) event.getData());
+                break;
             case SHIFT_START:
                 handleShiftStart((String) event.getData());
                 break;
@@ -277,6 +288,7 @@ public class SimulationEngine {
         updateLocationMetrics(dock);
         valve.setState(Valve.State.IN_QUEUE);
         valve.setCurrentLocation(dock);
+        applyHoldTime(valve, dock.getName(), currentTime);
         valve.startWaiting(currentTime); // Comenzar a contar tiempo de espera
         statistics.recordArrival(valve);
 
@@ -322,6 +334,9 @@ public class SimulationEngine {
 
         // Machine unit holds the valve temporarily; crane will pick it up
         valve.setCurrentLocation(machineUnit);
+        if (machineUnit != null) {
+            applyHoldTime(valve, machineUnit.getName(), currentTime);
+        }
         valve.startWaiting(currentTime);
         
         // ALTA PRIORIDAD: Válvulas que terminaron procesamiento
@@ -373,7 +388,7 @@ public class SimulationEngine {
                 break;
             }
 
-            Valve nextValve = almacen.peekQueue();
+            Valve nextValve = findNextReadyValve(almacen);
             if (nextValve == null) {
                 break;
             }
@@ -388,6 +403,7 @@ public class SimulationEngine {
             updateLocationMetrics(availableUnit);
 
             double processTime = nextValve.getCurrentProcessingTime();
+            nextValve.setReadyTime(currentTime);
             nextValve.startProcessing(currentTime);
             nextValve.setCurrentLocation(availableUnit); // Actualizar ubicación
 
@@ -443,6 +459,7 @@ public class SimulationEngine {
                         location.removeValve(valve);
                         updateLocationMetrics(location);
                         valve.setCurrentLocation(location);
+                        applyHoldTime(valve, location.getName(), currentTime);
                         valve.startWaiting(currentTime);
                         pendingCraneTransfers.add(valve);
                         
@@ -532,7 +549,13 @@ public class SimulationEngine {
         }
 
         // Buscar PRIMERA válvula cuyo destino tenga espacio (ProModel FIRST 1)
-        for (Valve valve : dock.getAllValves()) {
+        for (Valve valve : dock.getQueueSnapshot()) {
+            if (valve == null) {
+                continue;
+            }
+            if (!valve.isReady(currentTime)) {
+                continue;
+            }
             String destination = getNextDestination(valve);
             Location destLoc = destination != null ? locations.get(destination) : null;
 
@@ -565,6 +588,9 @@ public class SimulationEngine {
         Iterator<Valve> iterator = pendingCraneTransfers.iterator();
         while (iterator.hasNext()) {
             Valve valve = iterator.next();
+            if (valve == null || !valve.isReady(currentTime)) {
+                continue;
+            }
             String destination = getNextDestination(valve);
             if (destination == null) {
                 iterator.remove();
@@ -689,6 +715,7 @@ public class SimulationEngine {
             updateLocationMetrics(destLoc);
             valve.setState(Valve.State.IN_QUEUE);
             valve.setCurrentLocation(destLoc);
+            applyHoldTime(valve, destLoc.getName(), currentTime);
 
             // Immediately try to move to machine (ProModel: Almacen_M1 -> M1 is instant)
             String machineName = destination.replace("Almacen_", "");
@@ -760,10 +787,6 @@ public class SimulationEngine {
         return name.startsWith("M1.") || name.startsWith("M2.") || name.startsWith("M3.");
     }
 
-    private boolean isAlmacen(String name) {
-        return name.startsWith("Almacen_");
-    }
-
     private void updateMachineAggregate(String machineBaseName, double sampleTime) {
         double busySum = 0.0;
         int totalContents = 0;
@@ -816,6 +839,8 @@ public class SimulationEngine {
             case START_CRANE_MOVE:
             case END_CRANE_MOVE:
                 return true;
+            case HOLD_RELEASE:
+                return true;
             case SHIFT_START:
                 return hasPendingWorkForShift(event);
             default:
@@ -837,6 +862,71 @@ public class SimulationEngine {
         }
         boolean countTowardsSchedule = shouldCountTowardsSchedule(location.getName(), currentTime);
         location.updateStatistics(currentTime, countTowardsSchedule);
+    }
+
+    private void applyHoldTime(Valve valve, String locationName, double referenceTime) {
+        if (valve == null || locationName == null) {
+            return;
+        }
+
+        double holdTime = getHoldTimeFor(locationName);
+        if (holdTime <= 0.0) {
+            valve.setReadyTime(referenceTime);
+            return;
+        }
+
+        double readyAt = referenceTime + holdTime;
+        valve.setReadyTime(readyAt);
+        eventQueue.add(new Event(Event.Type.HOLD_RELEASE, readyAt, valve, locationName));
+    }
+
+    private Valve findNextReadyValve(Location location) {
+        if (location == null) {
+            return null;
+        }
+
+        for (Valve valve : location.getQueueSnapshot()) {
+            if (valve == null) {
+                continue;
+            }
+            Valve.State state = valve.getState();
+            if ((state == Valve.State.IN_QUEUE || state == Valve.State.WAITING_CRANE) && valve.isReady(currentTime)) {
+                return valve;
+            }
+        }
+        return null;
+    }
+
+    private void handleHoldRelease(Valve valve, String locationName) {
+        if (valve == null || locationName == null) {
+            return;
+        }
+
+        Location currentLocation = valve.getCurrentLocation();
+        if (currentLocation == null || !locationName.equals(currentLocation.getName())) {
+            return;
+        }
+
+        valve.setReadyTime(Math.max(valve.getReadyTime(), currentTime));
+
+        if ("DOCK".equals(locationName)) {
+            tryScheduleCraneMove();
+            return;
+        }
+
+        if (locationName.startsWith("Almacen_")) {
+            String machineName = locationName.replace("Almacen_", "");
+            Location machineParent = locations.get(machineName);
+            if (machineParent != null) {
+                checkMachineQueue(machineParent, currentLocation);
+            }
+        }
+
+        tryScheduleCraneMove();
+    }
+
+    private double getHoldTimeFor(String locationName) {
+        return locationHoldTimes.getOrDefault(locationName, 0.0);
     }
 
     private boolean hasPendingWorkForShift(Event event) {

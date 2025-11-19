@@ -187,6 +187,10 @@ public class Location {
         return all;
     }
 
+    public List<Valve> getQueueSnapshot() {
+        return new ArrayList<>(queue);
+    }
+
     public List<Valve> getProcessingValves() {
         return new ArrayList<>(processing);
     }

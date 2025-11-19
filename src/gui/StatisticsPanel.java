@@ -284,7 +284,7 @@ public class StatisticsPanel extends JPanel {
         locationModel.addRow(new Object[]{
             Localization.getLocationDisplayName(baseName),
             formatNumber(scheduledTime),
-            formatNumber(statsUnits),
+            formatNumber(unitCount),
             formatNumber(totalEntries),
             formatNumber(avgTimePerEntry),
             formatNumber(avgContents),

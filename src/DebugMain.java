@@ -38,6 +38,11 @@ public class DebugMain {
         printMachineGroup(engine, "M1", config.getMachineUnits("m1"), currentTime);
         printMachineGroup(engine, "M2", config.getMachineUnits("m2"), currentTime);
         printMachineGroup(engine, "M3", config.getMachineUnits("m3"), currentTime);
+
+        System.out.println();
+        debugMachineDetails(engine, "M1", config.getMachineUnits("m1"));
+        debugMachineDetails(engine, "M2", config.getMachineUnits("m2"));
+        debugMachineDetails(engine, "M3", config.getMachineUnits("m3"));
     }
 
     private static void printLocation(SimulationEngine engine, String name, double currentTime) {
@@ -142,12 +147,36 @@ public class DebugMain {
         System.out.printf("%s | %s | %s | %s | %s | %s | %s | %s | %s%n",
             displayName,
             FORMATTER.format(scheduledTime),
-            FORMATTER.format(statsUnits),
+            FORMATTER.format(unitCount),
             FORMATTER.format(totalEntries),
             FORMATTER.format(avgTimePerEntry),
             FORMATTER.format(avgContents),
             FORMATTER.format(maxContents),
             FORMATTER.format(scaledCurrentContents),
             FORMATTER.format(avgUtilization));
+    }
+
+    private static void debugMachineDetails(SimulationEngine engine, String baseName, int unitCount) {
+        if (unitCount <= 0) {
+            return;
+        }
+
+        double busySum = 0.0;
+        double observedSum = 0.0;
+        double contentsTimeSum = 0.0;
+
+        for (int i = 1; i <= unitCount; i++) {
+            String unitName = baseName + "." + i;
+            Location unit = engine.getLocations().get(unitName);
+            if (unit == null) {
+                continue;
+            }
+            busySum += unit.getTotalBusyTime();
+            observedSum += unit.getTotalObservedTime();
+            contentsTimeSum += unit.getTotalResidenceTime();
+        }
+
+        System.out.printf("[%s] Busy=%.2f hrs | Observed=%.2f hrs | Residence=%.2f hrs%n",
+            baseName, busySum, observedSum, contentsTimeSum);
     }
 }

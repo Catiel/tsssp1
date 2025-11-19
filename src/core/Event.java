@@ -8,6 +8,7 @@ public class Event implements Comparable<Event> {
         END_PROCESSING,
         START_CRANE_MOVE,
         END_CRANE_MOVE,
+        HOLD_RELEASE,
         CRANE_PICKUP,
         CRANE_RELEASE,
         SHIFT_START,
