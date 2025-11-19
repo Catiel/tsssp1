@@ -68,8 +68,10 @@ public class StatisticsPanel extends JPanel {
         styleTable(locationTable);
 
         // Resource Statistics Table
-        String[] resourceColumns = {"Recurso", "Unidades", "Viajes", "Tiempo de Viaje",
-                       "% Util Actual", "% Util Prom"};
+        String[] resourceColumns = {"Recurso", "Unidades", "Tiempo Programado (Hr)",
+                   "Tiempo de Trabajo (Min)", "Número de Usos", "Tiempo por Uso Prom (Min)",
+                   "Tiempo Viaje para Utilizar Prom (Min)", "Tiempo Viaje a Estacionar Prom (Min)",
+                   "% Bloqueado En Viaje", "% Utilización"};
         resourceModel = new DefaultTableModel(resourceColumns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -296,14 +298,23 @@ public class StatisticsPanel extends JPanel {
     private void updateResourceStatistics() {
         resourceModel.setRowCount(0);
         model.Crane crane = engine.getCrane();
+        statistics.ResourceStats stats = engine.getStatistics().getCraneStats();
+
+        if (crane == null || stats == null) {
+            return;
+        }
 
         resourceModel.addRow(new Object[]{
             crane.getName(),
-            1,
-            crane.getTotalTrips(),
-            String.format("%.2f hrs", crane.getTotalTravelTime()),
-            String.format("%.1f%%", crane.getUtilization()),
-            String.format("%.1f%%", crane.getUtilization())
+            stats.getUnits(),
+            formatNumber(stats.getScheduledHours()),
+            formatNumber(stats.getTotalWorkMinutes()),
+            formatNumber(stats.getTotalTrips()),
+            formatNumber(stats.getAvgHandleMinutes()),
+            formatNumber(stats.getAvgTravelMinutes()),
+            formatNumber(stats.getAvgParkMinutes()),
+            formatNumber(stats.getBlockedPercent()),
+            formatNumber(stats.getCurrentUtilization())
         });
     }
 

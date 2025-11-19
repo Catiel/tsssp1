@@ -52,6 +52,14 @@ public class Config {
         machine.m2.time_multiplier=1.0
         machine.m3.time_multiplier=1.0
         
+        # Resource settings
+        resource.grua.units=1
+        resource.grua.scheduled_hours=320.0
+        resource.grua.avg_handle_minutes=1.28
+        resource.grua.avg_travel_minutes=0.93
+        resource.grua.avg_park_minutes=0.0
+        resource.grua.blocked_percent=0.0
+
         # Valve Arrivals (weekly)
         arrival.valvula1.quantity=10
         arrival.valvula2.quantity=40
@@ -288,6 +296,42 @@ public class Config {
 
     private String normalizeLocationKey(String locationName) {
         return locationName.toLowerCase()
+            .replace(" ", "")
+            .replace(".", "");
+    }
+
+    public int getResourceUnits(String resourceName, int defaultValue) {
+        String key = "resource." + normalizeResourceKey(resourceName) + ".units";
+        return getInt(key, defaultValue);
+    }
+
+    public double getResourceScheduledHours(String resourceName, double defaultValue) {
+        String key = "resource." + normalizeResourceKey(resourceName) + ".scheduled_hours";
+        return getDouble(key, defaultValue);
+    }
+
+    public double getResourceAvgHandleMinutes(String resourceName, double defaultValue) {
+        String key = "resource." + normalizeResourceKey(resourceName) + ".avg_handle_minutes";
+        return getDouble(key, defaultValue);
+    }
+
+    public double getResourceAvgTravelMinutes(String resourceName, double defaultValue) {
+        String key = "resource." + normalizeResourceKey(resourceName) + ".avg_travel_minutes";
+        return getDouble(key, defaultValue);
+    }
+
+    public double getResourceAvgParkMinutes(String resourceName, double defaultValue) {
+        String key = "resource." + normalizeResourceKey(resourceName) + ".avg_park_minutes";
+        return getDouble(key, defaultValue);
+    }
+
+    public double getResourceBlockedPercent(String resourceName, double defaultValue) {
+        String key = "resource." + normalizeResourceKey(resourceName) + ".blocked_percent";
+        return getDouble(key, defaultValue);
+    }
+
+    private String normalizeResourceKey(String resourceName) {
+        return resourceName.toLowerCase()
             .replace(" ", "")
             .replace(".", "");
     }

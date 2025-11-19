@@ -779,9 +779,39 @@ public class SimulationEngine {
 
         // Update crane statistics
         crane.updateStatistics(sampleTime);
+        Config config = Config.getInstance();
+        int craneUnits = config.getResourceUnits(crane.getName(), crane.getUnits());
+        double weeksSimulated = Math.max(sampleTime, SAMPLE_EPSILON) / HOURS_PER_WEEK;
+        double defaultScheduled = shiftCalendar.getTotalWorkingHoursPerWeek() * weeksSimulated;
+        double scheduledHours = config.getResourceScheduledHours(crane.getName(), defaultScheduled);
+        int totalTrips = crane.getTotalTrips();
+
+        double defaultHandleMinutes = totalTrips > 0
+            ? (crane.getTotalUsageTime() * 60.0) / totalTrips
+            : 0.0;
+        double avgHandleMinutes = config.getResourceAvgHandleMinutes(crane.getName(), defaultHandleMinutes);
+        double defaultTravelMinutes = totalTrips > 0
+            ? (crane.getTotalTravelTime() * 60.0) / totalTrips
+            : 0.0;
+        double avgTravelMinutes = config.getResourceAvgTravelMinutes(crane.getName(), defaultTravelMinutes);
+        double avgParkMinutes = config.getResourceAvgParkMinutes(crane.getName(), 0.0);
+        double blockedPercent = config.getResourceBlockedPercent(crane.getName(), 0.0);
+
+        double totalWorkMinutes = totalTrips * (avgHandleMinutes + avgTravelMinutes + avgParkMinutes);
+        double utilization = scheduledHours > 1e-9
+            ? (totalWorkMinutes / 60.0) / scheduledHours * 100.0
+            : 0.0;
+
         statistics.updateCraneStats(
-            crane.getUtilization(),
-            crane.getTotalTrips(),
+            craneUnits,
+            scheduledHours,
+            totalWorkMinutes,
+            totalTrips,
+            avgHandleMinutes,
+            avgTravelMinutes,
+            avgParkMinutes,
+            blockedPercent,
+            utilization,
             sampleTime);
 
         lastSampleTime = sampleTime;

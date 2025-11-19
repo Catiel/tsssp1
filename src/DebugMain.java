@@ -1,5 +1,6 @@
 import core.SimulationEngine;
 import model.Location;
+import statistics.ResourceStats;
 import utils.Config;
 import utils.Localization;
 
@@ -42,6 +43,9 @@ public class DebugMain {
         debugMachineDetails(engine, "M1", config.getMachineUnits("m1"));
         debugMachineDetails(engine, "M2", config.getMachineUnits("m2"));
         debugMachineDetails(engine, "M3", config.getMachineUnits("m3"));
+
+        System.out.println();
+        printResourceStats(engine);
     }
 
     private static void printLocation(SimulationEngine engine, String name, double currentTime) {
@@ -168,5 +172,25 @@ public class DebugMain {
 
         System.out.printf("[%s] Busy=%.2f hrs | Observed=%.2f hrs | Residence=%.2f hrs%n",
             baseName, busySum, observedSum, contentsTimeSum);
+    }
+
+    private static void printResourceStats(SimulationEngine engine) {
+        ResourceStats stats = engine.getStatistics().getCraneStats();
+        if (stats == null) {
+            return;
+        }
+
+        System.out.println("Nombre | Unidades | Tiempo Programado (Hr) | Tiempo de Trabajo (Min) | Número de veces utilizado | Tiempo Por Uso Promedio (Min) | Tiempo Viaje para Utilizar Promedio (Min) | Tiempo Viaje a Estacionar Promedio (Min) | % Bloqueado En Viaje | % Utilización");
+        System.out.printf("%s | %s | %s | %s | %s | %s | %s | %s | %s | %s%n",
+            stats.getName(),
+            FORMATTER.format(stats.getUnits()),
+            FORMATTER.format(stats.getScheduledHours()),
+            FORMATTER.format(stats.getTotalWorkMinutes()),
+            FORMATTER.format(stats.getTotalTrips()),
+            FORMATTER.format(stats.getAvgHandleMinutes()),
+            FORMATTER.format(stats.getAvgTravelMinutes()),
+            FORMATTER.format(stats.getAvgParkMinutes()),
+            FORMATTER.format(stats.getBlockedPercent()),
+            FORMATTER.format(stats.getCurrentUtilization()));
     }
 }

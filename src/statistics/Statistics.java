@@ -48,8 +48,19 @@ public class Statistics {
         locationStats.get(locationName).update(contents, utilization, time);
     }
 
-    public void updateCraneStats(double utilization, int trips, double time) {
-        craneStats.update(utilization, trips, time);
+    public void updateCraneStats(int units,
+                                 double scheduledHours,
+                                 double totalWorkMinutes,
+                                 int trips,
+                                 double avgHandleMinutes,
+                                 double avgTravelMinutes,
+                                 double avgParkMinutes,
+                                 double blockedPercent,
+                                 double utilization,
+                                 double time) {
+        craneStats.update(units, scheduledHours, totalWorkMinutes, trips,
+            avgHandleMinutes, avgTravelMinutes, avgParkMinutes, blockedPercent,
+            utilization, time);
     }
 
     public EntityStats getEntityStats(Valve.Type type) {

@@ -288,6 +288,7 @@ public class Crane {
     public double getFullSpeed() { return fullSpeed; }
     public List<Double> getUtilizationHistory() { return new ArrayList<>(utilizationHistory); }
     public List<Double> getTimeHistory() { return new ArrayList<>(timeHistory); }
+    public int getUnits() { return units; }
     public List<Point> getCurrentPathPoints() { 
         synchronized(this) {
             return new ArrayList<>(currentPathPoints); 
