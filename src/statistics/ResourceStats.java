@@ -57,7 +57,9 @@ public class ResourceStats { // Declaración de la clase pública ResourceStats 
     }
 
     public double getAverageUtilization() { // Método que calcula la utilización promedio del recurso
-        return utilizationHistory.stream().mapToDouble(Double::doubleValue).average().orElse(0); // Convierte historial a stream de double, calcula promedio, retorna 0 si está vacío
+        synchronized (utilizationHistory) { // Evita ConcurrentModificationException durante la lectura
+            return utilizationHistory.stream().mapToDouble(Double::doubleValue).average().orElse(0); // Convierte historial a stream de double, calcula promedio, retorna 0 si está vacío
+        }
     }
 
     public double getCurrentUtilization() { // Método que retorna la utilización actual del recurso

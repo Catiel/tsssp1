@@ -82,14 +82,14 @@ public class SimulationPanel extends JPanel { // Clase que extiende JPanel para 
 
         panel.add(Box.createVerticalStrut(10)); // Agrega espaciador vertical de 10 píxeles
 
-        // Crane Statistics Table
-        String[] craneColumns = {"Metrica", "Valor"}; // Define columnas de tabla de grúa
+        // Operator Statistics Table
+        String[] craneColumns = {"Operador", "Estado", "Viajes", "Uso Total (min)", "Util %"}; // Define columnas de tabla de operadores
         craneModel = new DefaultTableModel(craneColumns, 0) { // Crea modelo de tabla con columnas
             @Override // Anotación de sobrescritura
             public boolean isCellEditable(int row, int column) { return false; } // Hace todas las celdas no editables
         };
         craneStatsTable = createStyledTable(craneModel); // Crea tabla con estilo aplicado
-        panel.add(createTableSection("Estadisticas de la Grua", craneStatsTable, 120)); // Agrega sección de tabla con altura 120
+        panel.add(createTableSection("Estadisticas de Operadores", craneStatsTable, 160)); // Agrega sección de tabla con altura
 
         return panel; // Retorna panel configurado
     }
@@ -236,15 +236,16 @@ public class SimulationPanel extends JPanel { // Clase que extiende JPanel para 
         });
     }
 
-    private void updateCraneStats() { // Método que actualiza tabla de estadísticas de la grúa
+    private void updateCraneStats() { // Método que actualiza tabla de estadísticas de los operadores
         craneModel.setRowCount(0); // Limpia todas las filas de la tabla
-        Crane crane = engine.getCrane(); // Obtiene grúa del motor
-
-        craneModel.addRow(new Object[]{"Estado", crane.isBusy() ? "OCUPADA" : "LIBRE"}); // Agrega fila con estado actual (ocupada o libre)
-        craneModel.addRow(new Object[]{"Viajes Totales", crane.getTotalTrips()}); // Agrega fila con total de viajes realizados
-        craneModel.addRow(new Object[]{"Tiempo de Viaje", String.format("%.2f hrs", crane.getTotalTravelTime())}); // Agrega fila con tiempo total de viaje en horas con 2 decimales
-            craneModel.addRow(new Object[]{"Utilizacion", String.format("%.1f%%", crane.getUtilization())}); // Agrega fila con utilización en porcentaje con 1 decimal
-        craneModel.addRow(new Object[]{"Transportando", crane.getCarryingValve() != null ? // Agrega fila con válvula que está transportando actualmente
-            crane.getCarryingValve().toString() : "Ninguno"}); // Muestra toString de válvula o "Ninguno" si no transporta nada
+        for (Operator operator : engine.getOperators().values()) {
+            craneModel.addRow(new Object[]{
+                operator.getName(),
+                operator.isBusy() ? "OCUPADO" : "LIBRE",
+                operator.getTotalTrips(),
+                String.format("%.1f", operator.getTotalUsageTime() * 60.0),
+                String.format("%.1f%%", operator.getUtilization())
+            });
+        }
     }
 }

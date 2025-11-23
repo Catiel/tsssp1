@@ -223,6 +223,7 @@ public class Operator { // Clase que representa un operador en la cervecería
     public boolean isMoving() { return isMoving; }
     public double getVisualProgress() { return visualProgress; }
     public Valve getCarryingEntity() { return carryingEntity; }
+    public Valve getCarryingValve() { return carryingEntity; } // Compatibilidad GUI
     public Point getCurrentPosition() { return logicalPosition; }
     public Point getHomePosition() { return homePosition; }
     public int getTotalTrips() { return totalTrips; }

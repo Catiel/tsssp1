@@ -1,6 +1,7 @@
 package gui; // Declaración del paquete gui para interfaces gráficas
 
 import core.SimulationEngine; // Importa el motor de simulación
+import model.Operator;
 import model.Valve; // Importa clase Valve
 import statistics.*; // Importa todas las clases de estadísticas
 import utils.Localization; // Importa clase de localización
@@ -43,6 +44,7 @@ public class ChartsPanel extends JPanel { // Clase que extiende JPanel para most
     public void setEngine(SimulationEngine engine) { // Método público que cambia el motor de simulación
         this.engine = engine; // Asigna nuevo motor
         clearDatasets(); // Limpia todos los datasets
+        rebuildOperatorSeries();
     }
 
     private void initializeCharts() { // Método que inicializa todos los gráficos
@@ -103,11 +105,11 @@ public class ChartsPanel extends JPanel { // Clase que extiende JPanel para most
         styleChart(wipChartObj); // Aplica estilo
         wipChart = new ChartPanel(wipChartObj); // Crea panel
 
-        // Crane Utilization Chart
-        craneDataset = new XYSeriesCollection(); // Inicializa colección para grúa
-        craneDataset.addSeries(new XYSeries("Utilizacion de la Grua")); // Agrega serie única para grúa
-        JFreeChart craneChart = ChartFactory.createXYLineChart( // Crea gráfico de utilización de grúa
-            "Utilizacion de la Grua", // Título
+        // Operator Utilization Chart
+        craneDataset = new XYSeriesCollection(); // Inicializa colección para operadores
+        rebuildOperatorSeries();
+        JFreeChart craneChart = ChartFactory.createXYLineChart( // Crea gráfico de utilización de operadores
+            "Utilizacion de Operadores", // Título
             "Tiempo (horas)", // Eje X
             "Utilizacion (%)", // Eje Y
             craneDataset, // Dataset
@@ -324,16 +326,26 @@ public class ChartsPanel extends JPanel { // Clase que extiende JPanel para most
         }
     }
 
-    private void updateCraneUtilization() { // Método que actualiza gráfico de utilización de grúa
+    private void updateCraneUtilization() { // Método que actualiza gráfico de utilización de operadores
         double currentTime = engine.getCurrentTime(); // Obtiene tiempo actual
-        model.Crane crane = engine.getCrane(); // Obtiene grúa
-        XYSeries series = craneDataset.getSeries("Utilizacion de la Grua"); // Obtiene serie de grúa
 
-        double utilization = crane.getUtilization(); // Obtiene utilización porcentual de la grúa
+        for (Operator operator : engine.getOperators().values()) {
+            XYSeries series;
+            try {
+                series = craneDataset.getSeries(operator.getName());
+            } catch (IllegalArgumentException ex) {
+                series = new XYSeries(operator.getName());
+                craneDataset.addSeries(series);
+            }
 
-        if (series.getItemCount() == 0 || // Si la serie está vacía O
-            series.getX(series.getItemCount() - 1).doubleValue() < currentTime) { // el último punto es anterior
-            series.add(currentTime, utilization); // Agrega nuevo punto
+            double utilization = operator.getUtilization();
+
+            if (series.getItemCount() == 0 ||
+                series.getX(series.getItemCount() - 1).doubleValue() < currentTime) {
+                series.add(currentTime, utilization);
+            } else {
+                series.update(series.getItemCount() - 1, utilization);
+            }
         }
     }
 
@@ -397,5 +409,15 @@ public class ChartsPanel extends JPanel { // Clase que extiende JPanel para most
             return config.getMachineUnits(baseName.toLowerCase(Locale.ROOT)); // Retorna valor configurado
         }
         return count; // Retorna número de unidades encontradas
+    }
+
+    private void rebuildOperatorSeries() {
+        if (engine == null || craneDataset == null) {
+            return;
+        }
+        craneDataset.removeAllSeries();
+        for (String operatorName : engine.getOperators().keySet()) {
+            craneDataset.addSeries(new XYSeries(operatorName));
+        }
     }
 }

@@ -3,6 +3,7 @@ gui\SimulationPanel.class
 core\Event.class
 gui\SimulationPanel$2.class
 gui\MainFrame.class
+core\SimulationEngine$TransferRequest.class
 utils\Logger$Level.class
 gui\StatisticsPanel$1.class
 utils\Logger$PerformanceTimer.class

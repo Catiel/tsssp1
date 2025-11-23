@@ -13,10 +13,10 @@ public class Valve { // Declaración de la clase pública Valve que representa u
         LUPULO("Lupulo", Color.decode("#4CAF50"), new String[]{"SILO_LUPULO", "COCCION"}), // Lúpulo color verde
         LEVADURA("Levadura", Color.decode("#FFC107"), new String[]{"SILO_LEVADURA", "FERMENTACION"}), // Levadura color amarillo
         MOSTO("Mosto", Color.decode("#8D6E63"), new String[]{"ENFRIAMIENTO", "FERMENTACION"}), // Mosto color café
-        CERVEZA("Cerveza", Color.decode("#FF9800"), new String[]{"MADURACION", "INSPECCION", "EMBOTELLADO"}), // Cerveza color ámbar
-        BOTELLA_CERVEZA("Botella", Color.decode("#FFD54F"), new String[]{"ETIQUETADO", "EMPACADO"}), // Botella color dorado
+        CERVEZA("Cerveza", Color.decode("#FF9800"), new String[]{"MADURACION", "INSPECCION", "EMBOTELLADO"}), // Cerveza color ámbar (MADURACION → INSPECCION → EMBOTELLADO o EXIT)
+        BOTELLA_CERVEZA("Botella", Color.decode("#FFD54F"), new String[]{"ETIQUETADO", "EMPACADO"}), // Botella color dorado (empieza en ETIQUETADO)
         CAJA_VACIA("Caja Vacia", Color.decode("#9E9E9E"), new String[]{"ALMACEN_CAJAS", "EMPACADO"}), // Caja vacía color gris
-        CAJA_CERVEZA("Caja Cerveza", Color.decode("#FFA726"), new String[]{"ALMACENAJE", "MERCADO"}); // Caja con cerveza color naranja
+        CAJA_CERVEZA("Caja Cerveza", Color.decode("#FFA726"), new String[]{"ALMACENAJE", "MERCADO"}); // Caja con cerveza color naranja (ALMACENAJE ACCUM 6 luego MERCADO EXIT)
 
         private final String displayName; // Nombre para mostrar del tipo de entidad
         private final Color color; // Color RGB para visualización del tipo de entidad

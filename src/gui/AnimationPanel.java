@@ -109,26 +109,28 @@ public class AnimationPanel extends JPanel { // Clase que extiende JPanel para m
         // Draw network paths and nodes
         drawNetwork(g2d); // Dibuja red de caminos y nodos
 
+        Set<Valve> valvesInTransit = getValvesCurrentlyInTransit();
+
         // Draw all brewery locations
-        drawLocation(g2d, "SILO_GRANDE"); // Silo de granos
-        drawLocation(g2d, "MALTEADO"); // Malteado
-        drawLocation(g2d, "SECADO"); // Secado
-        drawLocation(g2d, "MOLIENDA"); // Molienda
-        drawLocation(g2d, "MACERADO"); // Macerado
-        drawLocation(g2d, "FILTRADO"); // Filtrado
-        drawLocation(g2d, "COCCION"); // Cocción
-        drawLocation(g2d, "SILO_LUPULO"); // Silo de lúpulo
-        drawLocation(g2d, "ENFRIAMIENTO"); // Enfriamiento
-        drawLocation(g2d, "FERMENTACION"); // Fermentación
-        drawLocation(g2d, "SILO_LEVADURA"); // Silo de levadura
-        drawLocation(g2d, "MADURACION"); // Maduración
-        drawLocation(g2d, "INSPECCION"); // Inspección
-        drawLocation(g2d, "EMBOTELLADO"); // Embotellado
-        drawLocation(g2d, "ETIQUETADO"); // Etiquetado
-        drawLocation(g2d, "ALMACEN_CAJAS"); // Almacén de cajas
-        drawLocation(g2d, "EMPACADO"); // Empacado
-        drawLocation(g2d, "ALMACENAJE"); // Almacenaje
-        drawLocation(g2d, "MERCADO"); // Mercado (salida)
+        drawLocation(g2d, "SILO_GRANDE", valvesInTransit); // Silo de granos
+        drawLocation(g2d, "MALTEADO", valvesInTransit); // Malteado
+        drawLocation(g2d, "SECADO", valvesInTransit); // Secado
+        drawLocation(g2d, "MOLIENDA", valvesInTransit); // Molienda
+        drawLocation(g2d, "MACERADO", valvesInTransit); // Macerado
+        drawLocation(g2d, "FILTRADO", valvesInTransit); // Filtrado
+        drawLocation(g2d, "COCCION", valvesInTransit); // Cocción
+        drawLocation(g2d, "SILO_LUPULO", valvesInTransit); // Silo de lúpulo
+        drawLocation(g2d, "ENFRIAMIENTO", valvesInTransit); // Enfriamiento
+        drawLocation(g2d, "FERMENTACION", valvesInTransit); // Fermentación
+        drawLocation(g2d, "SILO_LEVADURA", valvesInTransit); // Silo de levadura
+        drawLocation(g2d, "MADURACION", valvesInTransit); // Maduración
+        drawLocation(g2d, "INSPECCION", valvesInTransit); // Inspección
+        drawLocation(g2d, "EMBOTELLADO", valvesInTransit); // Embotellado
+        drawLocation(g2d, "ETIQUETADO", valvesInTransit); // Etiquetado
+        drawLocation(g2d, "ALMACEN_CAJAS", valvesInTransit); // Almacén de cajas
+        drawLocation(g2d, "EMPACADO", valvesInTransit); // Empacado
+        drawLocation(g2d, "ALMACENAJE", valvesInTransit); // Almacenaje
+        drawLocation(g2d, "MERCADO", valvesInTransit); // Mercado (salida)
 
         // Draw operators (must be AFTER locations so they're on top)
         drawOperators(g2d); // Dibuja todos los operadores encima de todo
@@ -155,15 +157,20 @@ public class AnimationPanel extends JPanel { // Clase que extiende JPanel para m
             }
         }
 
-        // Highlight current crane path
-        List<Point> pathPoints = engine.getCrane().getCurrentPathPoints(); // Obtiene puntos del camino actual de la grúa
-        if (pathPoints.size() >= 2) { // Verifica si hay al menos 2 puntos (un camino válido)
-            g2d.setColor(new Color(255, 140, 0, 190)); // Color naranja semi-transparente para resaltar
-            g2d.setStroke(new BasicStroke(5.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)); // Línea más gruesa y redondeada
-            for (int i = 0; i < pathPoints.size() - 1; i++) { // Itera sobre segmentos del camino
-                Point from = pathPoints.get(i); // Obtiene punto inicial del segmento
-                Point to = pathPoints.get(i + 1); // Obtiene punto final del segmento
-                g2d.drawLine(from.x, from.y, to.x, to.y); // Dibuja segmento
+        // Highlight operator paths
+        for (Operator operator : engine.getOperators().values()) {
+            List<Point> pathPoints = operator.getCurrentPathPoints();
+            if (pathPoints.size() < 2) {
+                continue;
+            }
+            Color pathColor = getOperatorColor(operator.getName());
+            g2d.setColor(new Color(pathColor.getRed(), pathColor.getGreen(), pathColor.getBlue(), 190));
+            g2d.setStroke(new BasicStroke(operator.isBusy() ? 5.0f : 3.5f,
+                BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            for (int i = 0; i < pathPoints.size() - 1; i++) {
+                Point from = pathPoints.get(i);
+                Point to = pathPoints.get(i + 1);
+                g2d.drawLine(from.x, from.y, to.x, to.y);
             }
         }
 
@@ -178,21 +185,12 @@ public class AnimationPanel extends JPanel { // Clase que extiende JPanel para m
         }
     }
 
-    private void drawLocation(Graphics2D g2d, String name) { // Método que dibuja una locación individual
+    private void drawLocation(Graphics2D g2d, String name, Set<Valve> valvesInTransit) { // Método que dibuja una locación individual
         Location loc = engine.getLocations().get(name); // Obtiene locación del motor
         if (loc == null) return; // Sale si no existe
 
         Point pos = locationPositions.get(name); // Obtiene posición guardada
         if (pos == null) return; // Sale si no hay posición
-
-        // Verificar si algún operador está transportando a esta ubicación
-        Valve carryingValve = null;
-        for (Operator op : engine.getOperators().values()) {
-            if (op.getCarryingEntity() != null) {
-                carryingValve = op.getCarryingEntity();
-                break;
-            }
-        }
 
         int w = 140, h = 110; // Dimensiones del rectángulo de locación
         int x = pos.x - w/2; // Calcula X centrado
@@ -258,16 +256,9 @@ public class AnimationPanel extends JPanel { // Clase que extiende JPanel para m
             valves.clear(); // Limpia lista (MERCADO no muestra válvulas visualmente)
         }
 
-        // Si algún operador está en movimiento y transporta una válvula que está en esta ubicación,
-        // ocultarla hasta que la animación termine completamente
-        if (carryingValve != null && valves.contains(carryingValve)) {
-            // Verificar si algún operador está moviendo esta válvula
-            for (Operator op : engine.getOperators().values()) {
-                if (op.isMoving() && op.getCarryingEntity() == carryingValve) {
-                    valves.remove(carryingValve); // Remueve para no mostrarla duplicada
-                    break;
-                }
-            }
+        // Ocultar válvulas que están actualmente en tránsito para evitar duplicados visuales
+        if (!valvesInTransit.isEmpty()) {
+            valves.removeIf(valvesInTransit::contains);
         }
 
         if (!valves.isEmpty()) { // Si hay válvulas para mostrar
@@ -389,7 +380,7 @@ public class AnimationPanel extends JPanel { // Clase que extiende JPanel para m
         g2d.fillOval(x - 6, y - 8, 12, 12); // Dibuja luz de estado
 
         // Carrying valve
-        Valve carrying = operator.getCarryingEntity(); // Obtiene válvula transportada
+        Valve carrying = operator.getCarryingValve(); // Obtiene válvula transportada
         if (carrying != null) { // Si está transportando algo
             drawValve(g2d, carrying, x - 7, y + 52); // Dibuja válvula en las horquillas
         }
@@ -401,5 +392,22 @@ public class AnimationPanel extends JPanel { // Clase que extiende JPanel para m
         if (operator.isBusy()) label += " (OCU)";
         FontMetrics fm = g2d.getFontMetrics(); // Obtiene métricas de fuente
         g2d.drawString(label, x - fm.stringWidth(label)/2, y - 12); // Dibuja texto centrado
+    }
+
+    private Set<Valve> getValvesCurrentlyInTransit() {
+        Set<Valve> inTransit = new HashSet<>();
+        for (Operator operator : engine.getOperators().values()) {
+            Valve carrying = operator.getCarryingValve();
+            if (carrying != null) {
+                inTransit.add(carrying);
+            }
+        }
+        return inTransit;
+    }
+
+    private Color getOperatorColor(String operatorName) {
+        int hash = Math.abs(Objects.hashCode(operatorName));
+        float hue = (hash % 360) / 360f;
+        return Color.getHSBColor(hue, 0.6f, 0.85f);
     }
 }

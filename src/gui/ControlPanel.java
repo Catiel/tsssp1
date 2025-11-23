@@ -206,7 +206,7 @@ public class ControlPanel extends JPanel { // Clase que extiende JPanel para con
                     if (engine.isSimulationComplete()) { // Verifica si completó normalmente
                         JOptionPane.showMessageDialog(ControlPanel.this, // Muestra diálogo de información
                             "Simulacion finalizada!\n\n" + // Mensaje de finalización
-                            "Tiempo total: " + String.format("%.2f horas", engine.getCurrentTime()) + // Tiempo total
+                            "Tiempo total: " + String.format("%.2f horas", engine.getCurrentTime() / 60.0) + // Tiempo total (convertir minutos a horas)
                             "\nValvulas completadas: " + engine.getCompletedValves().size() + // Válvulas completadas
                             "\nRevisa la pestaña de Estadisticas para mas detalles.", // Instrucción adicional
                             "Simulacion Completa", // Título del diálogo

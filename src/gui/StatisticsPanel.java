@@ -74,10 +74,9 @@ public class StatisticsPanel extends JPanel { // Clase que extiende JPanel para 
         styleTable(locationTable); // Aplica estilo a la tabla
 
         // Resource Statistics Table
-        String[] resourceColumns = {"Recurso", "Unidades", "Tiempo Programado (Hr)", // Define columnas de tabla de recursos
-                   "Tiempo de Trabajo (Min)", "Número de Usos", "Tiempo por Uso Prom (Min)",
-                   "Tiempo Viaje para Utilizar Prom (Min)", "Tiempo Viaje a Estacionar Prom (Min)",
-                   "% Bloqueado En Viaje", "% Utilización"};
+        String[] resourceColumns = {"Operador", "Unidades", "Tiempo Programado (Hr)",
+               "Tiempo de Trabajo (Min)", "Viajes", "Tiempo por Uso Prom (Min)",
+               "Tiempo de Viaje Prom (Min)", "% Utilización"};
         resourceModel = new DefaultTableModel(resourceColumns, 0) { // Crea modelo de tabla con columnas
             @Override // Anotación de sobrescritura
             public boolean isCellEditable(int row, int column) { // Método que controla editabilidad
@@ -315,27 +314,31 @@ public class StatisticsPanel extends JPanel { // Clase que extiende JPanel para 
         return NUMBER_FORMAT.format(value); // Usa formateador configurado
     }
 
-    private void updateResourceStatistics() { // Método que actualiza tabla de estadísticas de recursos (grúa)
+    private void updateResourceStatistics() { // Método que actualiza tabla de estadísticas de operadores
         resourceModel.setRowCount(0); // Limpia todas las filas de la tabla
-        model.Crane crane = engine.getCrane(); // Obtiene grúa del motor
-        statistics.ResourceStats stats = engine.getStatistics().getCraneStats(); // Obtiene estadísticas de la grúa
+        double currentTime = engine.getCurrentTime();
+        double weeksSimulated = Math.max(currentTime, 1e-6) / 168.0;
+        double scheduledHoursPerUnit = engine.getShiftCalendar().getTotalWorkingHoursPerWeek();
+        double scheduledHours = scheduledHoursPerUnit * weeksSimulated;
 
-        if (crane == null || stats == null) { // Verifica si grúa o estadísticas existen
-            return; // Sale si no existen
+        for (model.Operator operator : engine.getOperators().values()) {
+            double workMinutes = operator.getTotalUsageTime() * 60.0;
+            double travelMinutes = operator.getTotalTravelTime() * 60.0;
+            int trips = operator.getTotalTrips();
+            double avgUse = trips > 0 ? workMinutes / trips : 0.0;
+            double avgTravel = trips > 0 ? travelMinutes / trips : 0.0;
+
+            resourceModel.addRow(new Object[]{
+                operator.getName(),
+                formatNumber(operator.getUnits()),
+                formatNumber(scheduledHours),
+                formatNumber(workMinutes),
+                formatNumber(trips),
+                formatNumber(avgUse),
+                formatNumber(avgTravel),
+                formatNumber(operator.getUtilization())
+            });
         }
-
-        resourceModel.addRow(new Object[]{ // Agrega fila con datos de la grúa formateados
-            crane.getName(), // Nombre del recurso (grúa)
-            stats.getUnits(), // Número de unidades
-            formatNumber(stats.getScheduledHours()), // Tiempo programado en horas
-            formatNumber(stats.getTotalWorkMinutes()), // Tiempo de trabajo total en minutos
-            formatNumber(stats.getTotalTrips()), // Número de usos (viajes)
-            formatNumber(stats.getAvgHandleMinutes()), // Tiempo por uso promedio en minutos
-            formatNumber(stats.getAvgTravelMinutes()), // Tiempo de viaje para utilizar promedio en minutos
-            formatNumber(stats.getAvgParkMinutes()), // Tiempo de viaje a estacionar promedio en minutos
-            formatNumber(stats.getBlockedPercent()), // Porcentaje bloqueado en viaje
-            formatNumber(stats.getCurrentUtilization()) // Utilización actual en porcentaje
-        });
     }
 
     private void updateSummary() { // Método que actualiza área de resumen con reporte completo

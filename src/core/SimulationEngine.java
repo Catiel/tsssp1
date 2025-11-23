@@ -37,7 +37,25 @@ public class SimulationEngine {
     private PathNetwork pathNetwork; // Red de rutas para movimientos
     private ShiftCalendar shiftCalendar; // Calendario de turnos laborales
     private final Set<String> pendingMachineWakeups; // Locaciones pendientes de despertar al inicio del turno
-    private final Queue<Valve> pendingOperatorTransfers; // Entidades pendientes de transporte por operadores
+    private static class TransferRequest {
+        final Valve entity;
+        final String origin;
+        final String destination;
+        final String operatorKey;
+
+        TransferRequest(Valve entity, String origin, String destination, String operatorKey) {
+            this.entity = entity;
+            this.origin = origin;
+            this.destination = destination;
+            this.operatorKey = operatorKey;
+        }
+
+        boolean requiresOperator() {
+            return operatorKey != null && !operatorKey.isEmpty();
+        }
+    }
+
+    private final Queue<TransferRequest> pendingOperatorTransfers; // Transferencias pendientes (con o sin operador)
     private final Map<Valve.Type, Integer> almacenajeAccumulator; // ACCUM 6 para ALMACENAJE
 
     // Statistics
@@ -84,11 +102,8 @@ public class SimulationEngine {
         int configuredWeeks = config.getSimulationWeeks(); // Obtener semanas configuradas
         this.weeksToSimulate = configuredWeeks > 0 ? configuredWeeks : DEFAULT_WEEKS_TO_SIMULATE; // Usar semanas configuradas o valor predeterminado
 
-        // Para cerveza: 10 horas diarias * 7 días * 60 minutos = 4200 minutos por semana
-        double minutesPerDay = 600.0; // 10 horas * 60 minutos
-        double daysPerWeek = 7.0;
-        double weeklySpan = minutesPerDay * daysPerWeek; // 4200 minutos
-        this.endTime = weeksToSimulate * weeklySpan; // Calcular tiempo final de simulación en minutos
+        // FIJO: Simulación de exactamente 70 horas = 4200 minutos (no depende de semanas)
+        this.endTime = 4200.0; // 70 horas * 60 minutos = 4200 minutos FIJO
 
         initializeLocations(); // Inicializar todas las ubicaciones
         initializeOperators(); // Inicializar los 4 operadores + 1 camión
@@ -195,22 +210,22 @@ public class SimulationEngine {
     
     // Método para inicializar las operaciones JOIN
     private void initializeJoinOperations() {
-        // JOIN COCCION: 1 GRANOS_CEBADA + 4 LUPULO → MOSTO
+        // JOIN COCCION: 1 GRANOS_CEBADA + 4 LUPULO → 1 MOSTO (ProModel: JOIN 4 LUPULO)
         Map<Valve.Type, Integer> coccionRequirements = new HashMap<>();
         coccionRequirements.put(Valve.Type.GRANOS_CEBADA, 1);
         coccionRequirements.put(Valve.Type.LUPULO, 4);
         joinOperations.put("COCCION", new JoinOperation("COCCION", coccionRequirements, Valve.Type.MOSTO));
         
-        // JOIN FERMENTACION: 10 MOSTO + 2 LEVADURA → CERVEZA
+        // JOIN FERMENTACION: 1 MOSTO + 2 LEVADURA → 1 CERVEZA (ProModel: JOIN 2 LEVADURA)
         Map<Valve.Type, Integer> fermentacionRequirements = new HashMap<>();
-        fermentacionRequirements.put(Valve.Type.MOSTO, 10);
+        fermentacionRequirements.put(Valve.Type.MOSTO, 1);
         fermentacionRequirements.put(Valve.Type.LEVADURA, 2);
         joinOperations.put("FERMENTACION", new JoinOperation("FERMENTACION", fermentacionRequirements, Valve.Type.CERVEZA));
         
-        // JOIN EMPACADO: 6 BOTELLA_CERVEZA + 1 CAJA_VACIA → CAJA_CERVEZA
+        // JOIN EMPACADO: 1 CAJA_VACIA + 6 BOTELLA_CERVEZA → 1 CAJA_CERVEZA (ProModel: JOIN 6 BOTELLA_CON_CERVEZA)
         Map<Valve.Type, Integer> empacadoRequirements = new HashMap<>();
-        empacadoRequirements.put(Valve.Type.BOTELLA_CERVEZA, 6);
         empacadoRequirements.put(Valve.Type.CAJA_VACIA, 1);
+        empacadoRequirements.put(Valve.Type.BOTELLA_CERVEZA, 6);
         joinOperations.put("EMPACADO", new JoinOperation("EMPACADO", empacadoRequirements, Valve.Type.CAJA_CERVEZA));
     }
 
@@ -231,17 +246,16 @@ public class SimulationEngine {
 
     // Método para programar llegadas de un tipo específico de entidad con frecuencia
     private void scheduleEntityArrivals(Valve.Type type, double frequency, String arrivalLocation) {
-        // Calcular número de arribos durante la simulación
-        int numArrivals = (int) Math.ceil(endTime / frequency);
+        // ProModel: Primera Vez 0, Ocurrencias INF, Frecuencia dada
+        // Programar arribos desde tiempo 0 hasta endTime con la frecuencia dada
+        double arrivalTime = 0.0; // Primera llegada en tiempo 0
         
-        for (int i = 0; i < numArrivals; i++) {
-            double arrivalTime = i * frequency; // Tiempo de arribo (Primera Vez 0)
-            
-            if (arrivalTime >= endTime) break; // No programar más allá del tiempo final
-            
+        while (arrivalTime < endTime) {
             Valve entity = new Valve(type, arrivalTime); // Crear nueva entidad
             allValves.add(entity); // Agregar a la lista de todas las entidades
             eventQueue.add(new Event(Event.Type.ARRIVAL, arrivalTime, entity, arrivalLocation)); // Programar evento de llegada
+            
+            arrivalTime += frequency; // Siguiente arribo según frecuencia
         }
     }
 
@@ -260,7 +274,7 @@ public class SimulationEngine {
         lastOperationalTime = 0.0; // Reiniciar último tiempo operacional
         lastSampleTime = 0.0; // Reiniciar último tiempo de muestreo
 
-        while (!eventQueue.isEmpty() && isRunning && (currentTime < endTime || hasOperationalEvents())) { // Bucle mientras haya eventos y esté ejecutándose
+        while (!eventQueue.isEmpty() && isRunning && currentTime < endTime) { // Bucle SOLO hasta endTime (4200 minutos = 70 horas EXACTAS)
             if (isPaused) { // Si está pausado
                 try {
                     Thread.sleep(100); // Esperar 100 ms
@@ -284,7 +298,11 @@ public class SimulationEngine {
 
             Event event = eventQueue.poll(); // Obtener y remover siguiente evento de la cola
             if (event != null) { // Si hay evento
-                currentTime = event.getTime(); // Actualizar tiempo actual al tiempo del evento
+                double eventTime = event.getTime(); // Obtener tiempo del evento
+                if (eventTime >= endTime) { // Si el evento está más allá del tiempo final
+                    break; // DETENER INMEDIATAMENTE - no procesar eventos después de 70 horas
+                }
+                currentTime = eventTime; // Actualizar tiempo actual al tiempo del evento
                 if (isOperationalEvent(event)) { // Si es evento operacional
                     lastOperationalTime = currentTime; // Actualizar último tiempo operacional
                 }
@@ -334,7 +352,7 @@ public class SimulationEngine {
                 handleEndProcessing(event.getValve()); // Manejar fin de procesamiento
                 break; // Salir del switch
             case START_CRANE_MOVE: // Si es inicio de movimiento de grúa
-                handleStartCraneMove(event.getValve(), (String) event.getData()); // Manejar inicio de movimiento
+                handleStartCraneMove(event.getValve(), (TransferRequest) event.getData()); // Manejar inicio de movimiento
                 break; // Salir del switch
             case END_CRANE_MOVE: // Si es fin de movimiento de operador
                 // Esperar a que la animación termine antes de procesar
@@ -349,7 +367,7 @@ public class SimulationEngine {
                         }
                     }
                 }
-                handleEndCraneMove(event.getValve(), (String) event.getData()); // Manejar fin de movimiento
+                handleEndCraneMove(event.getValve(), (TransferRequest) event.getData()); // Manejar fin de movimiento
                 break; // Salir del switch
             case HOLD_RELEASE: // Si es liberación de retención
                 handleHoldRelease(event.getValve(), (String) event.getData()); // Manejar liberación
@@ -394,6 +412,13 @@ public class SimulationEngine {
             entity.startProcessing(currentTime);
             updateLocationMetrics(arrivalLocation);
             eventQueue.add(new Event(Event.Type.END_PROCESSING, currentTime + processTime, entity, null));
+        } else if (processTime == 0) {
+            // Sin procesamiento en esta ubicación, avanzar inmediatamente
+            arrivalLocation.removeValve(entity);
+            updateLocationMetrics(arrivalLocation);
+            entity.advanceStep();
+            enqueueTransferRequest(entity, arrivalLocation);
+            tryScheduleOperatorMove();
         }
     }
 
@@ -418,6 +443,9 @@ public class SimulationEngine {
         } else if ("INSPECCION".equals(locName)) {
             // Inspección con probabilidad 90%/10%
             handleInspection(entity);
+        } else if ("EMBOTELLADO".equals(locName)) {
+            // FIRST 6: 1 CERVEZA → 6 BOTELLA_CERVEZA (ProModel routing)
+            handleEmbotellado(entity);
         } else if ("ALMACENAJE".equals(locName)) {
             // ACCUM 6 para ALMACENAJE
             handleAlmacenajeAccumulation(entity);
@@ -428,7 +456,7 @@ public class SimulationEngine {
             updateLocationMetrics(currentLoc);
             
             // Programar para movimiento
-            pendingOperatorTransfers.add(entity);
+            enqueueTransferRequest(entity, currentLoc);
             tryScheduleOperatorMove();
         }
     }
@@ -464,7 +492,7 @@ public class SimulationEngine {
                         currentTime + processTime, newEntity, null));
                 } else {
                     // Sin procesamiento adicional, mover directamente
-                    pendingOperatorTransfers.add(newEntity);
+                    enqueueTransferRequest(newEntity, loc);
                     tryScheduleOperatorMove();
                 }
             }
@@ -482,15 +510,41 @@ public class SimulationEngine {
         double random = Math.random();
         if (random < 0.9) {
             // 90% aprobado → continúa a EMBOTELLADO
-            entity.advanceStep();
-            pendingOperatorTransfers.add(entity);
+            // CERVEZA avanza a EMBOTELLADO (no se convierte aún a botella)
+            entity.advanceStep(); // Avanzar paso en la ruta
+            enqueueTransferRequest(entity, inspeccionLoc);
             tryScheduleOperatorMove();
         } else {
-            // 10% rechazado → EXIT (MERCADO)
+            // 10% rechazado → EXIT (registro de completitud pero rechazada)
             entity.setState(Valve.State.COMPLETED);
             completedValves.add(entity);
             statistics.recordCompletion(entity, currentTime);
         }
+    }
+    
+    // Método para manejar EMBOTELLADO: 1 CERVEZA → 6 BOTELLA_CERVEZA (FIRST 6)
+    private void handleEmbotellado(Valve entity) {
+        Location embotellLoc = locations.get("EMBOTELLADO");
+        if (embotellLoc != null) {
+            embotellLoc.removeValve(entity);
+            updateLocationMetrics(embotellLoc);
+        }
+        
+        // Crear 6 botellas de cerveza a partir de 1 cerveza
+        for (int i = 0; i < 6; i++) {
+            Valve bottleEntity = new Valve(Valve.Type.BOTELLA_CERVEZA, currentTime);
+            bottleEntity.setCurrentLocation(embotellLoc);
+            allValves.add(bottleEntity);
+            
+            // Programar movimiento a ETIQUETADO
+            enqueueTransferRequest(bottleEntity, embotellLoc);
+        }
+        
+        // Marcar CERVEZA original como completada (consumida en el embotellado)
+        entity.setState(Valve.State.COMPLETED);
+        completedValves.add(entity);
+        
+        tryScheduleOperatorMove();
     }
     
     // Método para manejar acumulación en ALMACENAJE (ACCUM 6)
@@ -501,20 +555,24 @@ public class SimulationEngine {
             updateLocationMetrics(almacenajeLoc);
         }
         
-        // Acumular cajas de cerveza
+        // Acumular cajas de cerveza (ACCUM 6 según ProModel)
         Valve.Type type = entity.getType();
-        almacenajeAccumulator.put(type, almacenajeAccumulator.getOrDefault(type, 0) + 1);
+        int currentCount = almacenajeAccumulator.getOrDefault(type, 0) + 1;
+        almacenajeAccumulator.put(type, currentCount);
         
-        // Si alcanzamos 6 cajas, enviar al camión
-        if (almacenajeAccumulator.get(type) >= 6) {
-            almacenajeAccumulator.put(type, almacenajeAccumulator.get(type) - 6);
+        // Cuando alcanzamos 6 cajas, liberar el lote completo al MERCADO
+        if (currentCount >= 6) {
+            almacenajeAccumulator.put(type, 0); // Reiniciar acumulador
             
-            // Crear batch de 6 cajas para el camión
-            for (int i = 0; i < 6; i++) {
-                entity.advanceStep();
-                pendingOperatorTransfers.add(entity);
-            }
+            // Esta entidad representa el lote de 6, avanza a MERCADO
+            entity.advanceStep();
+            enqueueTransferRequest(entity, almacenajeLoc);
             tryScheduleOperatorMove();
+        } else {
+            // Aún no alcanzamos 6, marcar como completada (consumida en el batch)
+            // El lote 6 se liberará cuando llegue la sexta caja
+            entity.setState(Valve.State.COMPLETED);
+            completedValves.add(entity);
         }
     }
 
@@ -622,7 +680,7 @@ public class SimulationEngine {
                         valve.setCurrentLocation(location); // Mantener ubicación temporalmente
                         applyHoldTime(valve, location.getName(), currentTime); // Aplicar tiempo de retención
                         valve.startWaiting(currentTime); // Comenzar tiempo de espera
-                        pendingOperatorTransfers.add(valve); // Agregar a transferencias pendientes
+                        enqueueTransferRequest(valve, location); // Agregar a transferencias pendientes
 
                         // Liberar espacio para siguiente válvula
                         String unitName = location.getName(); // Obtener nombre de ubicación
@@ -676,42 +734,40 @@ public class SimulationEngine {
             return; // Los operadores no trabajan fuera de turno
         }
 
-        // Intentar mover entidades pendientes de transferencia
-        Valve entityToMove = pollPendingOperatorTransfer(); // Buscar entidad pendiente
-        
-        if (entityToMove != null) { // Si hay entidad para mover
-            String destination = getNextDestination(entityToMove); // Obtener destino
-            Location destLoc = locations.get(destination); // Obtener ubicación de destino
-
-            if (destLoc != null && destLoc.canAccept()) { // Si destino existe y puede aceptar
-                scheduleOperatorMove(entityToMove, destination); // Programar movimiento de operador
-            }
+        TransferRequest request = pollPendingTransferRequest(); // Buscar transferencia pendiente
+        if (request != null) { // Si se encontró
+            scheduleOperatorMove(request); // Programar movimiento
         }
     }
 
     // Método eliminado: findFirstAvailableValveInDock (obsoleto con nuevo flujo)
 
-    // Método para obtener y remover entidad pendiente de transferencia
-    private Valve pollPendingOperatorTransfer() {
-        // Buscar entidad que necesita transporte
-        Iterator<Valve> iterator = pendingOperatorTransfers.iterator(); // Crear iterador
-        while (iterator.hasNext()) { // Mientras haya elementos
-            Valve entity = iterator.next(); // Obtener siguiente entidad
-            if (entity == null || !entity.isReady(currentTime)) { // Si es nula o no está lista
-                continue; // Continuar con siguiente
+    // Método para obtener y remover transferencia pendiente
+    private TransferRequest pollPendingTransferRequest() {
+        Iterator<TransferRequest> iterator = pendingOperatorTransfers.iterator();
+        while (iterator.hasNext()) {
+            TransferRequest request = iterator.next();
+            Valve entity = request.entity;
+            if (entity == null || !entity.isReady(currentTime)) {
+                continue;
             }
-            String destination = getNextDestination(entity); // Obtener destino
-            if (destination == null) { // Si no hay destino
-                iterator.remove(); // Remover de cola
-                continue; // Continuar con siguiente
+
+            Location destination = locations.get(request.destination);
+            if (destination == null || !destination.canAccept()) {
+                continue;
             }
-            Location destLoc = locations.get(destination); // Obtener ubicación de destino
-            if (destLoc != null && destLoc.canAccept()) { // Si destino existe y puede aceptar
-                iterator.remove(); // Remover de cola
-                return entity; // Retornar entidad
+
+            if (request.requiresOperator()) {
+                Operator operator = operators.get(request.operatorKey);
+                if (operator == null || operator.isBusy()) {
+                    continue; // Operador no disponible aún
+                }
             }
+
+            iterator.remove();
+            return request;
         }
-        return null; // No hay entidad disponible
+        return null;
     }
 
     // Método para obtener próximo destino de una entidad
@@ -729,60 +785,110 @@ public class SimulationEngine {
     }
 
     // Método para programar movimiento de operador
-    private void scheduleOperatorMove(Valve entity, String destination) {
-        Location from = entity.getCurrentLocation(); // Obtener ubicación origen
-        Location to = locations.get(destination); // Obtener ubicación destino
-
-        if (from == null || to == null) { // Si alguna ubicación no existe
-            return; // Salir del método
+    private void scheduleOperatorMove(TransferRequest request) {
+        if (request == null) {
+            return;
         }
 
-        // Determinar qué operador es responsable de este movimiento
-        String operatorKey = getResponsibleOperator(from.getName(), destination);
-        Operator operator = operators.get(operatorKey);
-        
-        if (operator == null || operator.isBusy()) { // Si no hay operador o está ocupado
-            return; // No se puede mover ahora
+        Valve entity = request.entity;
+        Location from = request.origin != null ? locations.get(request.origin) : entity.getCurrentLocation();
+        Location to = locations.get(request.destination);
+
+        if (entity == null || from == null || to == null) {
+            return; // Datos insuficientes
         }
 
-        operator.setBusy(true); // Establecer operador como ocupado
-
-        // Si entidad estaba bloqueada, terminar bloqueo
-        if (entity.getState() == Valve.State.BLOCKED) { // Si estaba bloqueada
-            entity.endBlocked(currentTime); // Finalizar bloqueo
+        if (!request.requiresOperator()) {
+            completeDirectTransfer(request);
+            return;
         }
 
-        PathNetwork.PathResult pathResult = pathNetwork.getPathForLocations(from.getName(), destination); // Obtener ruta entre ubicaciones
-        List<Point> pathPoints; // Lista de puntos de ruta
-        List<Double> segmentDistances; // Lista de distancias de segmentos
-        double totalDistanceMeters; // Distancia total en metros
-
-        if (pathResult.isValid() && pathResult.getPoints().size() >= 2) { // Si ruta es válida y tiene al menos 2 puntos
-            pathPoints = pathResult.getPoints(); // Usar puntos de ruta
-            segmentDistances = pathResult.getSegmentDistances(); // Usar distancias de segmentos
-            totalDistanceMeters = pathResult.getTotalDistance(); // Usar distancia total
-        } else { // Si no hay ruta válida
-            Point start = new Point(from.getPosition()); // Crear punto de inicio
-            Point end = new Point(to.getPosition()); // Crear punto de fin
-            pathPoints = Arrays.asList(start, end); // Crear lista con 2 puntos
-            double euclidean = start.distance(end); // Calcular distancia euclidiana
-            segmentDistances = Collections.singletonList(euclidean); // Lista con una distancia
-            totalDistanceMeters = euclidean; // Distancia total = distancia euclidiana
+        Operator operator = operators.get(request.operatorKey);
+        if (operator == null || operator.isBusy()) {
+            return;
         }
 
-        double travelTime = operator.calculateTravelTime(totalDistanceMeters, true); // Calcular tiempo de viaje
+        operator.setBusy(true);
 
-        operator.addTravelTime(travelTime); // Agregar tiempo de viaje a operador
-        entity.addMovementTime(travelTime); // Agregar tiempo de movimiento a entidad
-        entity.endWaiting(currentTime); // Finalizar tiempo de espera
+        if (entity.getState() == Valve.State.BLOCKED) {
+            entity.endBlocked(currentTime);
+        }
 
-        // Pasar el tiempo actual de simulación y la velocidad de animación
-        operator.startMove(pathPoints, segmentDistances, totalDistanceMeters, travelTime, currentTime, animationSpeed); // Iniciar movimiento de operador
+        PathNetwork.PathResult pathResult = pathNetwork.getPathForLocations(from.getName(), to.getName());
+        List<Point> pathPoints;
+        List<Double> segmentDistances;
+        double totalDistanceMeters;
 
-        eventQueue.add(new Event(Event.Type.START_CRANE_MOVE, // Agregar evento de inicio de movimiento
-            currentTime, entity, destination)); // Con tiempo actual
-        eventQueue.add(new Event(Event.Type.END_CRANE_MOVE, // Agregar evento de fin de movimiento
-            currentTime + travelTime, entity, destination)); // Con tiempo actual + tiempo de viaje
+        if (pathResult.isValid() && pathResult.getPoints().size() >= 2) {
+            pathPoints = pathResult.getPoints();
+            segmentDistances = pathResult.getSegmentDistances();
+            totalDistanceMeters = pathResult.getTotalDistance();
+        } else {
+            Point start = new Point(from.getPosition());
+            Point end = new Point(to.getPosition());
+            pathPoints = Arrays.asList(start, end);
+            double euclidean = start.distance(end);
+            segmentDistances = Collections.singletonList(euclidean);
+            totalDistanceMeters = euclidean;
+        }
+
+        double travelTime = operator.calculateTravelTime(totalDistanceMeters, true);
+
+        operator.addTravelTime(travelTime);
+        entity.addMovementTime(travelTime);
+        entity.endWaiting(currentTime);
+
+        operator.startMove(pathPoints, segmentDistances, totalDistanceMeters, travelTime, currentTime, animationSpeed);
+
+        eventQueue.add(new Event(Event.Type.START_CRANE_MOVE, currentTime, entity, request));
+        eventQueue.add(new Event(Event.Type.END_CRANE_MOVE, currentTime + travelTime, entity, request));
+    }
+
+    private void completeDirectTransfer(TransferRequest request) {
+        Valve entity = request.entity;
+        Location from = request.origin != null ? locations.get(request.origin) : entity.getCurrentLocation();
+        Location to = locations.get(request.destination);
+
+        if (entity == null || to == null) {
+            return;
+        }
+
+        if (from != null) {
+            from.removeValve(entity);
+            updateLocationMetrics(from);
+        }
+
+        to.addToQueue(entity);
+        updateLocationMetrics(to);
+        entity.setState(Valve.State.IN_QUEUE);
+        entity.setCurrentLocation(to);
+        applyHoldTime(entity, to.getName(), currentTime);
+        processEntityAtLocation(entity, to);
+        tryScheduleOperatorMove();
+    }
+
+    private void enqueueTransferRequest(Valve entity, Location originLocation) {
+        if (entity == null) {
+            return;
+        }
+
+        String destination = getNextDestination(entity);
+        if (destination == null) {
+            return;
+        }
+
+        String originName = originLocation != null ? originLocation.getName() : (entity.getCurrentLocation() != null ? entity.getCurrentLocation().getName() : null);
+        String operatorKey = requiresOperatorMove(originName, destination)
+            ? getResponsibleOperator(originName != null ? originName : "", destination)
+            : null;
+
+        pendingOperatorTransfers.add(new TransferRequest(entity, originName, destination, operatorKey));
+        entity.setState(Valve.State.WAITING_CRANE);
+        entity.startWaiting(currentTime);
+    }
+
+    private boolean requiresOperatorMove(String origin, String destination) {
+        return destination != null && !destination.equals(origin);
     }
     
     // Método para determinar qué operador es responsable de un movimiento
@@ -817,69 +923,69 @@ public class SimulationEngine {
     }
 
     // Método para manejar inicio de movimiento de operador
-    private void handleStartCraneMove(Valve entity, String destination) {
-        Location from = entity.getCurrentLocation(); // Obtener ubicación origen
-        if (from != null) { // Si hay ubicación origen
-            from.removeValve(entity); // Remover entidad de ubicación
-            updateLocationMetrics(from); // Actualizar métricas
+    private void handleStartCraneMove(Valve entity, TransferRequest request) {
+        if (entity == null || request == null) {
+            return;
         }
 
-        // Finalizar tiempo de espera
-        if (entity.getState() == Valve.State.IN_QUEUE ||  // Si está en cola o
-            entity.getState() == Valve.State.WAITING_CRANE) { // esperando transporte
-            entity.endWaiting(currentTime); // Finalizar tiempo de espera
+        Location from = request.origin != null ? locations.get(request.origin) : entity.getCurrentLocation();
+        if (from != null) {
+            from.removeValve(entity);
+            updateLocationMetrics(from);
         }
 
-        // Determinar operador responsable y registrar pickup
-        String operatorKey = getResponsibleOperator(from != null ? from.getName() : "", destination);
-        Operator operator = operators.get(operatorKey);
+        if (entity.getState() == Valve.State.IN_QUEUE || entity.getState() == Valve.State.WAITING_CRANE) {
+            entity.endWaiting(currentTime);
+        }
+
+        Operator operator = request.operatorKey != null ? operators.get(request.operatorKey) : null;
         if (operator != null) {
-            operator.pickupEntity(entity); // Operador recoge entidad
+            operator.pickupEntity(entity);
         }
-        
-        entity.setState(Valve.State.IN_TRANSIT); // Establecer estado en tránsito
-        entity.setCurrentLocation(null); // En tránsito = sin ubicación fija
+
+        entity.setState(Valve.State.IN_TRANSIT);
+        entity.setCurrentLocation(null);
     }
 
     // Método para manejar fin de movimiento de operador
-    private void handleEndCraneMove(Valve entity, String destination) {
-        Location destLoc = locations.get(destination); // Obtener ubicación de destino
-
-        // Determinar operador responsable
-        Location from = entity.getCurrentLocation();
-        String operatorKey = getResponsibleOperator(from != null ? from.getName() : "", destination);
-        Operator operator = operators.get(operatorKey);
-        
-        // Sincronizar animación antes de liberar
-        if (operator != null) {
-            operator.completeTrip(); // Completar viaje de operador
-            operator.releaseEntity(); // Liberar entidad de operador
-            operator.setBusy(false); // Establecer operador como no ocupado
+    private void handleEndCraneMove(Valve entity, TransferRequest request) {
+        if (entity == null || request == null) {
+            return;
         }
 
-        if (destination.equals("MERCADO")) { // Si destino es MERCADO (EXIT)
-            destLoc.addToQueue(entity); // Agregar entidad a cola de MERCADO
-            updateLocationMetrics(destLoc); // Actualizar métricas
-            destLoc.removeValve(entity); // Remover inmediatamente (actúa como sink)
-            updateLocationMetrics(destLoc); // Actualizar métricas nuevamente
-            entity.setState(Valve.State.COMPLETED); // Establecer estado completado
-            entity.setCurrentLocation(null); // Sin ubicación (completada)
-            completedValves.add(entity); // Agregar a lista de entidades completadas
-            statistics.recordCompletion(entity, currentTime); // Registrar completitud en estadísticas
-            completedInventoryCount++; // Incrementar contador de inventario completado
-        } else { // Cualquier otro destino
-            destLoc.addToQueue(entity); // Agregar entidad al destino
-            updateLocationMetrics(destLoc); // Actualizar métricas
-            entity.setState(Valve.State.IN_QUEUE); // Establecer estado en cola
-            entity.setCurrentLocation(destLoc); // Establecer ubicación actual
-            applyHoldTime(entity, destLoc.getName(), currentTime); // Aplicar tiempo de retención
+        Location destLoc = locations.get(request.destination);
+        Operator operator = request.operatorKey != null ? operators.get(request.operatorKey) : null;
 
-            // Procesar siguiente paso según el flujo
+        if (operator != null) {
+            operator.completeTrip();
+            operator.releaseEntity();
+            operator.setBusy(false);
+        }
+
+        if (destLoc == null) {
+            return;
+        }
+
+        if ("MERCADO".equals(request.destination)) {
+            destLoc.addToQueue(entity);
+            updateLocationMetrics(destLoc);
+            destLoc.removeValve(entity);
+            updateLocationMetrics(destLoc);
+            entity.setState(Valve.State.COMPLETED);
+            entity.setCurrentLocation(null);
+            completedValves.add(entity);
+            statistics.recordCompletion(entity, currentTime);
+            completedInventoryCount++;
+        } else {
+            destLoc.addToQueue(entity);
+            updateLocationMetrics(destLoc);
+            entity.setState(Valve.State.IN_QUEUE);
+            entity.setCurrentLocation(destLoc);
+            applyHoldTime(entity, destLoc.getName(), currentTime);
             processEntityAtLocation(entity, destLoc);
         }
 
-        // Intentar siguiente movimiento del operador
-        tryScheduleOperatorMove(); // Intentar programar movimiento de operador
+        tryScheduleOperatorMove();
     }
     
     // Método para procesar entidad en una ubicación
@@ -889,15 +995,22 @@ public class SimulationEngine {
         // Verificar si hay procesamiento que hacer en esta ubicación
         Double processTime = Valve.LOCATION_PROCESS_TIMES.get(locName);
         if (processTime != null && processTime > 0) {
-            entity.setReadyTime(currentTime); // Establecer tiempo de preparación
-            entity.startProcessing(currentTime); // Iniciar procesamiento
-            
-            eventQueue.add(new Event(Event.Type.END_PROCESSING, // Agregar evento de fin de procesamiento
-                currentTime + processTime, entity, null)); // Con tiempo actual + tiempo de procesamiento
+            // Mover de cola a procesamiento
+            if (location.hasAvailableUnit()) {
+                location.moveToProcessing(entity);
+                updateLocationMetrics(location);
+                entity.setReadyTime(currentTime); // Establecer tiempo de preparación
+                entity.startProcessing(currentTime); // Iniciar procesamiento
+                
+                eventQueue.add(new Event(Event.Type.END_PROCESSING, // Agregar evento de fin de procesamiento
+                    currentTime + processTime, entity, null)); // Con tiempo actual + tiempo de procesamiento
+            }
         } else {
-            // Sin procesamiento, programar para siguiente movimiento
+            // Sin procesamiento, programar para siguiente movimiento inmediato
+            location.removeValve(entity);
+            updateLocationMetrics(location);
             entity.advanceStep();
-            pendingOperatorTransfers.add(entity);
+            enqueueTransferRequest(entity, location);
             tryScheduleOperatorMove();
         }
     }
@@ -1114,7 +1227,7 @@ public class SimulationEngine {
         valve.setReadyTime(Math.max(valve.getReadyTime(), currentTime)); // Actualizar tiempo de preparación
 
         // Después de liberación de retención, intentar mover entidad
-        pendingOperatorTransfers.add(valve);
+        enqueueTransferRequest(valve, currentLocation);
         tryScheduleOperatorMove(); // Intentar programar movimiento de operador
     }
 

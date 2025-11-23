@@ -8,14 +8,14 @@ import model.Valve; // Importa la clase Valve para acceder a los tipos de válvu
 public class Config { // Declaración de la clase pública Config que gestiona la configuración de la simulación usando patrón Singleton
     private static Config instance; // Variable estática que almacena la única instancia de Config (patrón Singleton)
     private Properties properties; // Variable que almacena las propiedades de configuración como pares clave-valor
-    private static final String CONFIG_FILE = "simulation.properties"; // Constante con el nombre del archivo de configuración
+    private static final String CONFIG_FILE = "brewery.properties"; // Constante con el nombre del archivo de configuración
 
     // Default configuration values
     private static final String DEFAULT_PROPERTIES = """
         # Valve Manufacturing Simulation Configuration
         
         # Simulation Parameters
-        simulation.weeks=8
+        simulation.weeks=1
         simulation.hours_per_week=168
         simulation.sample_interval=1.0
         
@@ -70,10 +70,11 @@ public class Config { // Declaración de la clase pública Config que gestiona l
         arrival.frequency=168
         
         # Shift Schedule (hours in 24h format)
-        shift.start_hour=6
-        shift.end_hour=22
-        shift.working_days=Monday,Tuesday,Wednesday,Thursday,Friday
-        shift.blocks=6-14,14-22
+        shift.enabled=false
+        shift.start_hour=0
+        shift.end_hour=24
+        shift.working_days=Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday
+        shift.blocks=0-24
         
         # Animation Settings
         animation.fps=60
@@ -296,6 +297,10 @@ public class Config { // Declaración de la clase pública Config que gestiona l
             }
         }
         return blocks; // Retorna la lista de bloques parseados
+    }
+
+    public boolean isShiftCalendarEnabled() { // Método que indica si debe aplicarse el calendario de turnos
+        return getBoolean("shift.enabled", false); // Retorna false por defecto para simulación continua de 70 horas
     }
 
     public int getUIWidth() { // Método público que obtiene el ancho de la interfaz gráfica
