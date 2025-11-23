@@ -184,7 +184,7 @@ public class SimulationPanel extends JPanel { // Clase que extiende JPanel para 
     private void updateLocationStats() { // Método que actualiza tabla de estadísticas de ubicaciones
         locationModel.setRowCount(0); // Limpia todas las filas de la tabla
         // Primero mostrar ubicaciones principales
-        String[] mainLocations = {"DOCK", "STOCK", "Almacen_M1", "Almacen_M2", "Almacen_M3"}; // Array con nombres de ubicaciones principales
+        String[] mainLocations = {"MALTEADO", "SECADO", "MOLIENDA", "MACERADO", "COCCION", "FILTRADO", "ENFRIAMIENTO", "FERMENTACION", "MADURACION", "INSPECCION", "EMBOTELLADO", "ETIQUETADO", "EMPACADO", "ALMACENAJE", "MERCADO"}; // Array con nombres de ubicaciones principales
         for (String name : mainLocations) { // Itera sobre cada ubicación principal
             Location loc = engine.getLocations().get(name); // Obtiene ubicación del motor
             if (loc != null) { // Verifica si existe la ubicación

@@ -4,10 +4,10 @@ core\Event.class
 gui\SimulationPanel$2.class
 gui\MainFrame.class
 utils\Logger$Level.class
-DebugMain.class
 gui\StatisticsPanel$1.class
 utils\Logger$PerformanceTimer.class
 core\Event$Type.class
+core\JoinOperation.class
 model\Location.class
 gui\SimulationPanel$3.class
 Main.class
@@ -18,6 +18,8 @@ core\SimulationClock.class
 model\PathNetwork$PathResult.class
 model\Crane.class
 utils\Localization.class
+model\Operator.class
+gui\SimulationConfigDialog.class
 core\SimulationEngine$1.class
 gui\StatisticsPanel$2.class
 utils\Config.class

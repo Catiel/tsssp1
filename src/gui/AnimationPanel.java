@@ -51,11 +51,10 @@ public class AnimationPanel extends JPanel { // Clase que extiende JPanel para m
             double deltaSeconds = (currentTime - lastFrameTime) / 1000.0; // Calcula tiempo transcurrido desde último frame en segundos
             lastFrameTime = currentTime; // Actualiza tiempo del último frame
 
-            Crane crane = engine.getCrane(); // Obtiene la grúa del motor
-
-            // Actualizar posición visual basada en TIEMPO REAL, no tiempo de simulación
-            // Esto hace que la animación sea suave sin importar qué tan rápido corra la simulación
-            crane.updateVisualPosition(deltaSeconds); // Actualiza posición visual de la grúa con delta time
+            // Actualizar posición visual de todos los operadores basada en TIEMPO REAL
+            engine.getOperators().values().forEach(operator -> 
+                operator.updateVisualPosition(deltaSeconds)
+            );
 
             repaint(); // Solicita repintado del panel
         });
@@ -88,13 +87,7 @@ public class AnimationPanel extends JPanel { // Clase que extiende JPanel para m
         refreshLocationPositions(); // Refresca posiciones
     }
 
-    private int getMachineUnitCount(String baseName) { // Método que cuenta unidades de una máquina
-        int count = 0; // Inicializa contador
-        while (engine.getLocations().containsKey(baseName + "." + (count + 1))) { // Mientras exista siguiente unidad
-            count++; // Incrementa contador
-        }
-        return count; // Retorna total de unidades
-    }
+    // Método eliminado: getMachineUnitCount (obsoleto en sistema de cervecería)
 
     @Override // Anotación de sobrescritura
     protected void paintComponent(Graphics g) { // Método que dibuja el componente
@@ -116,20 +109,29 @@ public class AnimationPanel extends JPanel { // Clase que extiende JPanel para m
         // Draw network paths and nodes
         drawNetwork(g2d); // Dibuja red de caminos y nodos
 
-        // Draw all locations
-        drawLocation(g2d, "DOCK"); // Dibuja DOCK
-        drawLocation(g2d, "STOCK"); // Dibuja STOCK
-        drawLocation(g2d, "Almacen_M1"); // Dibuja Almacen_M1
-        drawLocation(g2d, "Almacen_M2"); // Dibuja Almacen_M2
-        drawLocation(g2d, "Almacen_M3"); // Dibuja Almacen_M3
+        // Draw all brewery locations
+        drawLocation(g2d, "SILO_GRANDE"); // Silo de granos
+        drawLocation(g2d, "MALTEADO"); // Malteado
+        drawLocation(g2d, "SECADO"); // Secado
+        drawLocation(g2d, "MOLIENDA"); // Molienda
+        drawLocation(g2d, "MACERADO"); // Macerado
+        drawLocation(g2d, "FILTRADO"); // Filtrado
+        drawLocation(g2d, "COCCION"); // Cocción
+        drawLocation(g2d, "SILO_LUPULO"); // Silo de lúpulo
+        drawLocation(g2d, "ENFRIAMIENTO"); // Enfriamiento
+        drawLocation(g2d, "FERMENTACION"); // Fermentación
+        drawLocation(g2d, "SILO_LEVADURA"); // Silo de levadura
+        drawLocation(g2d, "MADURACION"); // Maduración
+        drawLocation(g2d, "INSPECCION"); // Inspección
+        drawLocation(g2d, "EMBOTELLADO"); // Embotellado
+        drawLocation(g2d, "ETIQUETADO"); // Etiquetado
+        drawLocation(g2d, "ALMACEN_CAJAS"); // Almacén de cajas
+        drawLocation(g2d, "EMPACADO"); // Empacado
+        drawLocation(g2d, "ALMACENAJE"); // Almacenaje
+        drawLocation(g2d, "MERCADO"); // Mercado (salida)
 
-        // Draw machine groups with their individual units
-        drawMachineGroup(g2d, "M1", getMachineUnitCount("M1")); // Dibuja grupo de M1
-        drawMachineGroup(g2d, "M2", getMachineUnitCount("M2")); // Dibuja grupo de M2
-        drawMachineGroup(g2d, "M3", getMachineUnitCount("M3")); // Dibuja grupo de M3
-
-        // Draw crane (must be AFTER locations so it's on top)
-        drawCrane(g2d); // Dibuja grúa encima de todo
+        // Draw operators (must be AFTER locations so they're on top)
+        drawOperators(g2d); // Dibuja todos los operadores encima de todo
 
         g2d.setTransform(originalTransform); // Restaura transformación original
     }
@@ -183,15 +185,14 @@ public class AnimationPanel extends JPanel { // Clase que extiende JPanel para m
         Point pos = locationPositions.get(name); // Obtiene posición guardada
         if (pos == null) return; // Sale si no hay posición
 
-        // Las ubicaciones padre (M1, M2, M3) no se dibujan individualmente
-        // Solo se muestran sus unidades mediante drawMachineGroup
-        if (name.equals("M1") || name.equals("M2") || name.equals("M3")) { // Verifica si es máquina parent
-            return; // Sale sin dibujar
+        // Verificar si algún operador está transportando a esta ubicación
+        Valve carryingValve = null;
+        for (Operator op : engine.getOperators().values()) {
+            if (op.getCarryingEntity() != null) {
+                carryingValve = op.getCarryingEntity();
+                break;
+            }
         }
-
-        // Obtener la grúa y verificar si está transportando a esta ubicación
-        Crane crane = engine.getCrane(); // Obtiene grúa
-        Valve carryingValve = crane.getCarryingValve(); // Obtiene válvula que está transportando
 
         int w = 140, h = 110; // Dimensiones del rectángulo de locación
         int x = pos.x - w/2; // Calcula X centrado
@@ -227,11 +228,11 @@ public class AnimationPanel extends JPanel { // Clase que extiende JPanel para m
         g2d.drawRoundRect(x, y, w, h, 12, 12); // Dibuja borde
 
         // Draw icon based on type
-        if (name.equals("DOCK") || name.equals("STOCK")) { // Si es DOCK o STOCK
-            drawPalletIcon(g2d, x + w/2, y + 40, name.equals("STOCK")); // Dibuja ícono de pallet
-        } else if (name.startsWith("Almacen")) { // Si es almacén
+        if (name.equals("MERCADO")) { // Si es MERCADO (salida)
+            drawPalletIcon(g2d, x + w/2, y + 40, true); // Dibuja ícono de pallet
+        } else if (name.equals("ALMACENAJE") || name.equals("ALMACEN_CAJAS") || name.startsWith("SILO")) { // Si es almacenamiento
             drawStorageIcon(g2d, x + w/2, y + 40); // Dibuja ícono de almacenamiento
-        } else { // Si es máquina
+        } else { // Si es proceso (malteado, cocción, fermentación, etc.)
             drawMachineIcon(g2d, x + w/2, y + 45, loc.getProcessingSize() > 0); // Dibuja ícono de máquina
         }
 
@@ -242,7 +243,7 @@ public class AnimationPanel extends JPanel { // Clase que extiende JPanel para m
 
         // Capacity
         int displayedContents = loc.getCurrentContents(); // Obtiene contenido actual
-        if (name.equals("STOCK")) { // Si es STOCK
+        if (name.equals("MERCADO")) { // Si es MERCADO (salida)
             displayedContents = engine.getCompletedInventoryCount(); // Usa contador de inventario completado
         }
 
@@ -253,14 +254,20 @@ public class AnimationPanel extends JPanel { // Clase que extiende JPanel para m
 
         // Draw valves - excluir la que está siendo transportada si la animación está en progreso
         List<Valve> valves = new ArrayList<>(loc.getAllValves()); // Crea copia de lista de válvulas
-        if (name.equals("STOCK") && !valves.isEmpty()) { // Si es STOCK y hay válvulas
-            valves.clear(); // Limpia lista (STOCK no muestra válvulas visualmente)
+        if (name.equals("MERCADO") && !valves.isEmpty()) { // Si es MERCADO y hay válvulas
+            valves.clear(); // Limpia lista (MERCADO no muestra válvulas visualmente)
         }
 
-        // Si la grúa está en movimiento y transporta una válvula que está en esta ubicación,
+        // Si algún operador está en movimiento y transporta una válvula que está en esta ubicación,
         // ocultarla hasta que la animación termine completamente
-        if (crane.isMoving() && carryingValve != null && valves.contains(carryingValve)) { // Si grúa se mueve y tiene válvula de esta locación
-            valves.remove(carryingValve); // Remueve para no mostrarla duplicada
+        if (carryingValve != null && valves.contains(carryingValve)) {
+            // Verificar si algún operador está moviendo esta válvula
+            for (Operator op : engine.getOperators().values()) {
+                if (op.isMoving() && op.getCarryingEntity() == carryingValve) {
+                    valves.remove(carryingValve); // Remueve para no mostrarla duplicada
+                    break;
+                }
+            }
         }
 
         if (!valves.isEmpty()) { // Si hay válvulas para mostrar
@@ -316,120 +323,7 @@ public class AnimationPanel extends JPanel { // Clase que extiende JPanel para m
         }
     }
 
-    private void drawMachineGroup(Graphics2D g2d, String baseName, int unitCount) { // Método que dibuja grupo de máquinas
-        if (unitCount <= 0) { // Si no hay unidades
-            return; // Sale sin dibujar
-        }
-        // Obtener posición del grupo
-        Location parentLoc = engine.getLocations().get(baseName); // Obtiene locación parent
-        if (parentLoc == null) return; // Sale si no existe
-        Point pos = parentLoc.getPosition(); // Obtiene posición
-
-        Crane crane = engine.getCrane(); // Obtiene grúa
-        Valve carryingValve = crane.getCarryingValve(); // Obtiene válvula transportada
-
-        // Contar unidades activas y válvulas
-        int activeUnits = 0; // Inicializa contador de unidades activas
-        int totalValves = 0; // Inicializa contador total de válvulas
-        int queuedValves = 0; // Inicializa contador de válvulas en cola
-        int processingValves = 0; // Inicializa contador de válvulas en procesamiento
-
-        for (int i = 1; i <= unitCount; i++) { // Itera sobre cada unidad
-            Location unit = engine.getLocations().get(baseName + "." + i); // Obtiene unidad i
-            if (unit != null) { // Si existe
-                int procSize = unit.getProcessingSize(); // Obtiene tamaño de procesamiento
-                int qSize = unit.getQueueSize(); // Obtiene tamaño de cola
-                if (procSize > 0) { // Si hay válvulas procesando
-                    activeUnits++; // Incrementa unidades activas
-                }
-                totalValves += unit.getCurrentContents(); // Acumula contenido total
-                queuedValves += qSize; // Acumula cola
-                processingValves += procSize; // Acumula procesamiento
-            }
-        }
-
-        int w = 180, h = 140; // Dimensiones del rectángulo del grupo
-        int x = pos.x - w/2; // Calcula X centrado
-        int y = pos.y - h/2; // Calcula Y centrado
-
-        // Sombra
-        g2d.setColor(new Color(0, 0, 0, 40)); // Color negro semi-transparente
-        g2d.fillRoundRect(x + 4, y + 4, w, h, 12, 12); // Dibuja sombra desplazada
-
-        // Fondo del grupo
-        g2d.setColor(new Color(220, 230, 250, 230)); // Color azul muy claro semi-transparente
-        g2d.fillRoundRect(x, y, w, h, 12, 12); // Dibuja fondo
-
-        // Borde
-        g2d.setColor(new Color(100, 120, 180)); // Color azul medio
-        g2d.setStroke(new BasicStroke(3.0f)); // Grosor de borde
-        g2d.drawRoundRect(x, y, w, h, 12, 12); // Dibuja borde
-
-        // Título del grupo
-        g2d.setColor(Color.BLACK); // Color negro para texto
-        g2d.setFont(new Font("Arial", Font.BOLD, 14)); // Fuente Arial negrita tamaño 14
-        String title = Localization.getLocationDisplayName(baseName); // Obtiene nombre localizado
-        g2d.drawString(title, x + 10, y + 22); // Dibuja título
-
-        // Badge con número de unidades
-        int badgeX = x + w - 60; // Calcula posición X del badge
-        int badgeY = y + 8; // Calcula posición Y del badge
-        g2d.setColor(new Color(100, 120, 180)); // Color azul medio para fondo
-        g2d.fillRoundRect(badgeX, badgeY, 50, 20, 8, 8); // Dibuja fondo del badge
-        g2d.setColor(Color.WHITE); // Color blanco para texto
-        g2d.setFont(new Font("Arial", Font.BOLD, 11)); // Fuente para badge
-        g2d.drawString(unitCount + " units", badgeX + 6, badgeY + 14); // Dibuja texto del badge
-
-        // Ícono de máquina
-        drawMachineIcon(g2d, x + w/2, y + 60, activeUnits > 0); // Dibuja ícono centrado
-
-        // Obtener contador de válvulas procesadas
-        statistics.LocationStats machineStats = engine.getStatistics().getLocationStats(baseName); // Obtiene estadísticas de la máquina
-        int valvesProcessed = machineStats != null ? machineStats.getValvesProcessed() : 0; // Obtiene contador o 0
-
-        // Información de utilización
-        g2d.setColor(new Color(50, 50, 70)); // Color gris oscuro para texto
-        g2d.setFont(new Font("Arial", Font.BOLD, 11)); // Fuente negrita
-        g2d.drawString(String.format("Activas: %d/%d", activeUnits, unitCount), x + 10, y + h - 60); // Dibuja unidades activas
-
-        g2d.setFont(new Font("Arial", Font.PLAIN, 10)); // Fuente normal más pequeña
-        g2d.drawString(String.format("Procesando: %d | En cola: %d", processingValves, queuedValves), x + 10, y + h - 45); // Dibuja contadores
-        g2d.drawString(String.format("Util: %.1f%%", (activeUnits * 100.0 / unitCount)), x + 10, y + h - 30); // Dibuja utilización
-
-        // Contador de válvulas procesadas
-        g2d.setColor(new Color(76, 175, 80)); // Color verde
-        g2d.setFont(new Font("Arial", Font.BOLD, 10)); // Fuente negrita
-        g2d.drawString(String.format("Procesadas: %d", valvesProcessed), x + 10, y + h - 15); // Dibuja contador total procesadas
-
-        // Dibujar algunas válvulas si hay - excluir la que está siendo transportada
-        if (totalValves > 0) { // Si hay válvulas
-            List<Valve> allValves = new ArrayList<>(); // Crea lista para todas las válvulas
-            for (int i = 1; i <= unitCount; i++) { // Itera sobre unidades
-                Location unit = engine.getLocations().get(baseName + "." + i); // Obtiene unidad i
-                if (unit != null) { // Si existe
-                    allValves.addAll(unit.getAllValves()); // Agrega todas sus válvulas
-                }
-            }
-
-            // No mostrar la válvula que está siendo transportada hasta que la animación termine
-            if (crane.isMoving() && carryingValve != null && allValves.contains(carryingValve)) { // Si grúa se mueve y tiene válvula de este grupo
-                allValves.remove(carryingValve); // Remueve para no mostrarla duplicada
-            }
-
-            int count = Math.min(8, allValves.size()); // Muestra máximo 8 válvulas
-            for (int i = 0; i < count; i++) { // Itera sobre válvulas a mostrar
-                Valve v = allValves.get(i); // Obtiene válvula i
-                int vx = x + w - 90 + (i % 4) * 18; // Calcula posición X (4 columnas)
-                int vy = y + h - 28 + (i / 4) * 16; // Calcula posición Y (2 filas)
-                drawValve(g2d, v, vx, vy); // Dibuja válvula
-            }
-            if (allValves.size() > 8) { // Si hay más de 8 válvulas
-                g2d.setColor(Color.BLACK); // Color negro
-                g2d.setFont(new Font("Arial", Font.BOLD, 9)); // Fuente pequeña
-                g2d.drawString("+" + (allValves.size() - 8), x + w - 25, y + h - 10); // Muestra contador de restantes
-            }
-        }
-    }
+    // Método eliminado: drawMachineGroup (obsoleto en sistema de cervecería - todas las ubicaciones son individuales)
 
     private void drawValve(Graphics2D g2d, Valve v, int x, int y) { // Método que dibuja una válvula individual
         Color c = v.getType().getColor(); // Obtiene color del tipo de válvula
@@ -442,19 +336,34 @@ public class AnimationPanel extends JPanel { // Clase que extiende JPanel para m
         g2d.drawOval(x, y, 14, 14); // Dibuja borde
     }
 
-    private void drawCrane(Graphics2D g2d) { // Método que dibuja la grúa
-        Crane crane = engine.getCrane(); // Obtiene grúa
-        Point cranePos = crane.getInterpolatedPosition(); // Obtiene posición interpolada suave
+    private void drawOperators(Graphics2D g2d) { // Método que dibuja todos los operadores
+        for (Operator operator : engine.getOperators().values()) {
+            drawOperator(g2d, operator);
+        }
+    }
 
-        int x = cranePos.x; // Coordenada X de la grúa
-        int y = cranePos.y - 70; // Coordenada Y elevada para que esté sobre el suelo
+    private void drawOperator(Graphics2D g2d, Operator operator) { // Método que dibuja un operador individual
+        Point opPos = operator.getInterpolatedPosition(); // Obtiene posición interpolada suave
+
+        int x = opPos.x; // Coordenada X del operador
+        int y = opPos.y - 70; // Coordenada Y elevada para que esté sobre el suelo
+
+        // Determinar color según tipo de operador
+        Color bodyColor;
+        boolean isTruck = operator.getName().equals("CAMION");
+        
+        if (isTruck) {
+            bodyColor = new Color(50, 150, 200); // Azul para camión
+        } else {
+            bodyColor = new Color(255, 165, 0); // Naranja para operadores
+        }
 
         // Forklift body
-        g2d.setColor(new Color(255, 165, 0)); // Color naranja para cuerpo
+        g2d.setColor(bodyColor); // Color según tipo
         g2d.fillRoundRect(x - 22, y, 44, 35, 8, 8); // Dibuja cuerpo principal
 
         // Cabin
-        g2d.setColor(new Color(255, 200, 0)); // Color amarillo para cabina
+        g2d.setColor(bodyColor.brighter()); // Color más claro para cabina
         g2d.fillRect(x - 15, y + 5, 30, 22); // Dibuja cabina
 
         // Window
@@ -475,20 +384,21 @@ public class AnimationPanel extends JPanel { // Clase que extiende JPanel para m
         g2d.fillOval(x + 6, y + 32, 14, 14); // Dibuja rueda derecha
 
         // Status light
-        Color status = crane.isBusy() ? new Color(255, 69, 0) : new Color(76, 175, 80); // Rojo si ocupada, verde si libre
+        Color status = operator.isBusy() ? new Color(255, 69, 0) : new Color(76, 175, 80); // Rojo si ocupado, verde si libre
         g2d.setColor(status); // Establece color de estado
         g2d.fillOval(x - 6, y - 8, 12, 12); // Dibuja luz de estado
 
         // Carrying valve
-        Valve carrying = crane.getCarryingValve(); // Obtiene válvula transportada
+        Valve carrying = operator.getCarryingEntity(); // Obtiene válvula transportada
         if (carrying != null) { // Si está transportando algo
             drawValve(g2d, carrying, x - 7, y + 52); // Dibuja válvula en las horquillas
         }
 
         // Label
         g2d.setColor(Color.BLACK); // Color negro para texto
-        g2d.setFont(new Font("Arial", Font.BOLD, 10)); // Fuente negrita pequeña
-        String label = crane.isBusy() ? "OCUPADA" : "LIBRE"; // Texto según estado
+        g2d.setFont(new Font("Arial", Font.BOLD, 9)); // Fuente negrita pequeña
+        String label = operator.getName().replace("OPERADOR_", ""); // Texto con nombre corto
+        if (operator.isBusy()) label += " (OCU)";
         FontMetrics fm = g2d.getFontMetrics(); // Obtiene métricas de fuente
         g2d.drawString(label, x - fm.stringWidth(label)/2, y - 12); // Dibuja texto centrado
     }

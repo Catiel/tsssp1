@@ -13,7 +13,7 @@ public class Main { // Clase principal de la aplicación
         Logger logger = Logger.getInstance(); // Obtiene instancia singleton del logger
         logger.configure(config); // Configura logger con parámetros de config (nivel, archivo, etc.)
 
-        logger.info("Starting Valve Manufacturing Simulation..."); // Registra mensaje de inicio de aplicación en log
+        logger.info("Starting Brewery Production Simulation..."); // Registra mensaje de inicio de aplicación en log
 
         // Set FlatLaf Look and Feel for modern UI
         try { // Bloque try para capturar excepciones al configurar Look and Feel

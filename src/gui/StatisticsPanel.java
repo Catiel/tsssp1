@@ -198,7 +198,7 @@ public class StatisticsPanel extends JPanel { // Clase que extiende JPanel para 
         double currentTime = engine.getCurrentTime(); // Obtiene tiempo actual de simulación
 
         // Ubicaciones principales
-        String[] mainLocations = {"DOCK", "STOCK", "Almacen_M1", "Almacen_M2", "Almacen_M3"}; // Array con nombres de ubicaciones principales
+        String[] mainLocations = {"MALTEADO", "SECADO", "MOLIENDA", "MACERADO", "COCCION", "FILTRADO", "ENFRIAMIENTO", "FERMENTACION", "MADURACION", "INSPECCION", "EMBOTELLADO", "ETIQUETADO", "EMPACADO", "ALMACENAJE", "MERCADO"}; // Array con nombres de ubicaciones principales
         for (String name : mainLocations) { // Itera sobre cada ubicación principal
             model.Location loc = engine.getLocations().get(name); // Obtiene ubicación del motor
             if (loc != null) { // Verifica si existe la ubicación
@@ -238,7 +238,7 @@ public class StatisticsPanel extends JPanel { // Clase que extiende JPanel para 
 
         if (loc.getName().startsWith("Almacen_") && loc.getCapacity() > 0 && loc.getCapacity() < Integer.MAX_VALUE) { // Si es almacén con capacidad finita
             utilization = (avgContents / loc.getCapacity()) * 100.0; // Calcula utilización como porcentaje de capacidad
-        } else if (!loc.getName().startsWith("Almacen_")) { // Si no es almacén (DOCK, STOCK)
+        } else { // Procesar cualquier otra ubicación
             utilization = loc.getUtilization(); // Usa utilización calculada por la ubicación
         }
 

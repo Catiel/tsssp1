@@ -20,9 +20,9 @@ public class ShiftCalendar { // Declaración de la clase pública ShiftCalendar 
         this.workingDays = new HashSet<>(); // Inicializa el conjunto de días laborables vacío
         this.shiftBlocks = new ArrayList<>(); // Inicializa la lista de bloques de turnos vacía
 
-        String[] dayNames = config.getWorkingDays(); // Obtiene los nombres de días laborables desde la configuración
-        for (String day : dayNames) { // Itera sobre cada nombre de día laborable
-            workingDays.add(getDayIndex(day.trim())); // Convierte el nombre a índice (0-6) y lo agrega al conjunto
+        // Para cerveza: trabajan 7 días a la semana
+        for (int i = 0; i < 7; i++) {
+            workingDays.add(i); // Agrega todos los días (0-6)
         }
 
         List<int[]> configuredBlocks = config.getShiftBlocks(); // Obtiene los bloques de turnos configurados

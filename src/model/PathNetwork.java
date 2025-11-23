@@ -19,32 +19,68 @@ public class PathNetwork { // Declaración de la clase pública PathNetwork que 
         initializeNetwork(); // Llama al método que configura la red con nodos y conexiones predefinidas
     }
 
-    private void initializeNetwork() { // Método privado que inicializa la red con las posiciones y conexiones según ProModel
-        nodes.put("N1", new Point(200, 140)); // Define nodo N1 en posición (200,140) - DOCK / posición inicial de grúa
-        nodes.put("N2", new Point(210, 420)); // Define nodo N2 en posición (210,420) - STOCK
-        nodes.put("N3", new Point(560, 420)); // Define nodo N3 en posición (560,420) - M1 / Almacen_M1
-        nodes.put("N4", new Point(760, 300)); // Define nodo N4 en posición (760,300) - M2 / Almacen_M2
-        nodes.put("N5", new Point(940, 180)); // Define nodo N5 en posición (940,180) - M3 / Almacen_M3
-
-        locationToNode.put("DOCK", "N1"); // Mapea la locación DOCK al nodo N1
-        locationToNode.put("STOCK", "N2"); // Mapea la locación STOCK al nodo N2
-        locationToNode.put("Almacen_M1", "N3"); // Mapea la locación Almacen_M1 al nodo N3
-        locationToNode.put("M1", "N3"); // Mapea la locación M1 al nodo N3 (misma posición que su almacén)
-        locationToNode.put("Almacen_M2", "N4"); // Mapea la locación Almacen_M2 al nodo N4
-        locationToNode.put("M2", "N4"); // Mapea la locación M2 al nodo N4 (misma posición que su almacén)
-        locationToNode.put("Almacen_M3", "N5"); // Mapea la locación Almacen_M3 al nodo N5
-        locationToNode.put("M3", "N5"); // Mapea la locación M3 al nodo N5 (misma posición que su almacén)
-
-        addPath("N1", "N2", 10.0); // Agrega camino bidireccional entre N1 y N2 con distancia de 10 metros
-        addPath("N1", "N3", 14.14); // Agrega camino bidireccional entre N1 y N3 con distancia de 14.14 metros
-        addPath("N1", "N4", 22.36); // Agrega camino bidireccional entre N1 y N4 con distancia de 22.36 metros
-        addPath("N1", "N5", 20.0); // Agrega camino bidireccional entre N1 y N5 con distancia de 20 metros
-        addPath("N2", "N3", 10.0); // Agrega camino bidireccional entre N2 y N3 con distancia de 10 metros
-        addPath("N2", "N4", 20.0); // Agrega camino bidireccional entre N2 y N4 con distancia de 20 metros
-        addPath("N2", "N5", 22.36); // Agrega camino bidireccional entre N2 y N5 con distancia de 22.36 metros
-        addPath("N3", "N4", 10.0); // Agrega camino bidireccional entre N3 y N4 con distancia de 10 metros
-        addPath("N3", "N5", 14.14); // Agrega camino bidireccional entre N3 y N5 con distancia de 14.14 metros
-        addPath("N4", "N5", 10.0); // Agrega camino bidireccional entre N4 y N5 con distancia de 10 metros
+    private void initializeNetwork() { // Método privado que inicializa la red de cervecería con 4 redes independientes
+        // RED_RECEPCION: Flujo de granos (MALTEADO → SECADO → MOLIENDA)
+        nodes.put("RR1", new Point(100, 100)); // MALTEADO - Inicio recepción granos
+        nodes.put("RR2", new Point(250, 100)); // SECADO - Proceso de secado
+        nodes.put("RR3", new Point(400, 100)); // MOLIENDA - Molienda de granos
+        
+        locationToNode.put("MALTEADO", "RR1");
+        locationToNode.put("SECADO", "RR2");
+        locationToNode.put("MOLIENDA", "RR3");
+        locationToNode.put("MACERADO", "RR3"); // MACERADO conectado a MOLIENDA
+        
+        addPath("RR1", "RR2", 150.0); // MALTEADO → SECADO (150 pasos)
+        addPath("RR2", "RR3", 150.0); // SECADO → MOLIENDA (150 pasos)
+        
+        // RED_LUPULO: Flujo de lúpulo (SILO_LUPULO → COCCION)
+        nodes.put("RL1", new Point(600, 200)); // SILO_LUPULO
+        nodes.put("RL2", new Point(750, 200)); // COCCION
+        
+        locationToNode.put("SILO_LUPULO", "RL1");
+        locationToNode.put("COCCION", "RL2");
+        locationToNode.put("FILTRADO", "RL2"); // FILTRADO conectado a COCCION
+        
+        addPath("RL1", "RL2", 150.0); // SILO_LUPULO → COCCION (150 pasos)
+        
+        // RED_LEVADURA: Flujo de levadura (SILO_LEVADURA → FERMENTACION)
+        nodes.put("RV1", new Point(950, 300)); // SILO_LEVADURA
+        nodes.put("RV2", new Point(1100, 300)); // FERMENTACION
+        nodes.put("RV3", new Point(1250, 300)); // ENFRIAMIENTO
+        nodes.put("RV4", new Point(1400, 300)); // MADURACION
+        
+        locationToNode.put("SILO_LEVADURA", "RV1");
+        locationToNode.put("ENFRIAMIENTO", "RV3");
+        locationToNode.put("FERMENTACION", "RV2");
+        locationToNode.put("MADURACION", "RV4");
+        locationToNode.put("INSPECCION", "RV4"); // INSPECCION conectado a MADURACION
+        
+        addPath("RV1", "RV2", 150.0); // SILO_LEVADURA → FERMENTACION (150 pasos)
+        addPath("RV2", "RV3", 150.0); // FERMENTACION → ENFRIAMIENTO (150 pasos)
+        addPath("RV3", "RV4", 150.0); // ENFRIAMIENTO → MADURACION (150 pasos)
+        
+        // RED_EMPACADO: Flujo de empacado (EMBOTELLADO → ETIQUETADO → EMPACADO → ALMACENAJE → MERCADO)
+        nodes.put("RE1", new Point(1600, 200)); // INSPECCION
+        nodes.put("RE2", new Point(1600, 350)); // EMBOTELLADO
+        nodes.put("RE3", new Point(1600, 500)); // ETIQUETADO
+        nodes.put("RE4", new Point(1450, 650)); // ALMACEN_CAJAS
+        nodes.put("RE5", new Point(1600, 650)); // EMPACADO
+        nodes.put("RE6", new Point(1450, 800)); // ALMACENAJE
+        nodes.put("RE7", new Point(1600, 950)); // MERCADO
+        
+        locationToNode.put("EMBOTELLADO", "RE2");
+        locationToNode.put("ETIQUETADO", "RE3");
+        locationToNode.put("ALMACEN_CAJAS", "RE4");
+        locationToNode.put("EMPACADO", "RE5");
+        locationToNode.put("ALMACENAJE", "RE6");
+        locationToNode.put("MERCADO", "RE7");
+        
+        addPath("RE1", "RE2", 150.0); // INSPECCION → EMBOTELLADO (150 pasos)
+        addPath("RE2", "RE3", 150.0); // EMBOTELLADO → ETIQUETADO (150 pasos)
+        addPath("RE3", "RE5", 150.0); // ETIQUETADO → EMPACADO (150 pasos)
+        addPath("RE4", "RE5", 150.0); // ALMACEN_CAJAS → EMPACADO (150 pasos)
+        addPath("RE5", "RE6", 150.0); // EMPACADO → ALMACENAJE (150 pasos)
+        addPath("RE6", "RE7", 150.0); // ALMACENAJE → MERCADO (150 pasos)
     }
 
     private void addPath(String from, String to, double distance) { // Método privado que agrega un camino bidireccional entre dos nodos

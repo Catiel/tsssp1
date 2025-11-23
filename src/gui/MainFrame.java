@@ -14,12 +14,12 @@ public class MainFrame extends JFrame { // Clase principal que extiende JFrame, 
     private StatisticsPanel statisticsPanel; // Panel que muestra estadísticas detalladas
 
     public MainFrame() { // Constructor que inicializa el frame principal
-        setTitle("Simulacion de Valvulas - Edicion Profesional"); // Establece título de la ventana
+        setTitle("Simulacion de Produccion de Cerveza Artesanal"); // Establece título de la ventana
         setSize(1600, 1000); // Establece tamaño de la ventana en píxeles
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE); // Configura para cerrar aplicación al cerrar ventana
         setLocationRelativeTo(null); // Centra la ventana en la pantalla
 
-        Logger.getInstance().info("Initializing main frame..."); // Registra inicio de inicialización en log
+        Logger.getInstance().info("Initializing brewery simulation..."); // Registra inicio de inicialización en log
 
         engine = new SimulationEngine(); // Crea nueva instancia del motor de simulación
 
@@ -65,7 +65,7 @@ public class MainFrame extends JFrame { // Clase principal que extiende JFrame, 
         statusBar.setBorder(BorderFactory.createEtchedBorder()); // Establece borde grabado
         statusBar.setPreferredSize(new Dimension(getWidth(), 25)); // Establece altura preferida de 25 píxeles
 
-        JLabel statusLabel = new JLabel("Listo - Simulacion de Valvulas v1.0"); // Crea etiqueta con mensaje de estado
+        JLabel statusLabel = new JLabel("Listo - Simulacion de Cerveza Artesanal v1.0"); // Crea etiqueta con mensaje de estado
         statusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 11)); // Establece fuente Segoe UI tamaño 11
         statusBar.add(statusLabel); // Agrega etiqueta a la barra de estado
 

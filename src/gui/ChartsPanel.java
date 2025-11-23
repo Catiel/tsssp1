@@ -83,7 +83,7 @@ public class ChartsPanel extends JPanel { // Clase que extiende JPanel para most
 
         // WIP (Work in Process) Chart
         wipDataset = new XYSeriesCollection(); // Inicializa colección para WIP
-        for (String location : Arrays.asList("Almacen_M1", "Almacen_M2", "Almacen_M3")) { // Itera sobre almacenes
+        for (String location : Arrays.asList("MALTEADO", "COCCION", "FERMENTACION", "EMBOTELLADO", "EMPACADO", "ALMACENAJE")) { // Itera sobre ubicaciones principales
             wipDataset.addSeries(new XYSeries( // Agrega serie para cada almacén
                 Localization.getLocationDisplayName(location))); // Nombre localizado
         }
@@ -283,7 +283,7 @@ public class ChartsPanel extends JPanel { // Clase que extiende JPanel para most
         double currentTime = engine.getCurrentTime(); // Obtiene tiempo actual
 
         // Update almacenes
-        for (String locationName : Arrays.asList("Almacen_M1", "Almacen_M2", "Almacen_M3")) { // Itera sobre almacenes
+        for (String locationName : Arrays.asList("MALTEADO", "COCCION", "FERMENTACION", "EMBOTELLADO", "EMPACADO", "ALMACENAJE")) { // Itera sobre ubicaciones principales
             model.Location location = engine.getLocations().get(locationName); // Obtiene locación
             String displayName = Localization.getLocationDisplayName(locationName); // Obtiene nombre localizado
             XYSeries series = wipDataset.getSeries(displayName); // Obtiene serie correspondiente
@@ -376,7 +376,7 @@ public class ChartsPanel extends JPanel { // Clase que extiende JPanel para most
         }
 
         // Agregar almacenes
-        for (String almacenName : Arrays.asList("Almacen_M1", "Almacen_M2", "Almacen_M3")) { // Itera sobre almacenes
+        for (String almacenName : Arrays.asList("MALTEADO", "COCCION", "FERMENTACION", "EMBOTELLADO", "EMPACADO", "ALMACENAJE")) { // Itera sobre ubicaciones principales
             model.Location location = engine.getLocations().get(almacenName); // Obtiene locación
             String displayName = Localization.getLocationDisplayName(almacenName); // Obtiene nombre localizado
 

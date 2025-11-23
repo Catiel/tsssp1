@@ -32,11 +32,13 @@ public class SimulationEngine {
     // Model components
     private Map<String, Location> locations; // Mapa de ubicaciones por nombre
     private Map<String, Double> locationHoldTimes; // Tiempos de retención por ubicación
-    private Crane crane; // La grúa del sistema
+    private Map<String, Operator> operators; // Mapa de operadores (4 operadores + 1 camión)
+    private Map<String, JoinOperation> joinOperations; // Operaciones JOIN (COCCION, FERMENTACION, EMPACADO)
     private PathNetwork pathNetwork; // Red de rutas para movimientos
     private ShiftCalendar shiftCalendar; // Calendario de turnos laborales
-    private final Set<String> pendingMachineWakeups; // Máquinas pendientes de despertar al inicio del turno
-    private final Queue<Valve> pendingCraneTransfers; // Válvulas pendientes de transporte por grúa
+    private final Set<String> pendingMachineWakeups; // Locaciones pendientes de despertar al inicio del turno
+    private final Queue<Valve> pendingOperatorTransfers; // Entidades pendientes de transporte por operadores
+    private final Map<Valve.Type, Integer> almacenajeAccumulator; // ACCUM 6 para ALMACENAJE
 
     // Statistics
     private Statistics statistics; // Objeto que recopila estadísticas
@@ -47,11 +49,11 @@ public class SimulationEngine {
     private double lastSampleTime; // Último tiempo de muestreo de estadísticas
     private int completedInventoryCount; // Contador de inventario completado
 
-    // Configuration
-    private static final double SAMPLE_INTERVAL = 1.0; // Intervalo de muestreo de estadísticas (cada hora)
+    // Configuration - BREWERY SIMULATION (in minutes, not hours)
+    private static final double SAMPLE_INTERVAL = 60.0; // Intervalo de muestreo de estadísticas (cada 60 minutos)
     private static final double SAMPLE_EPSILON = 1e-6; // Tolerancia numérica para comparaciones de tiempo
-    private static final int DEFAULT_WEEKS_TO_SIMULATE = 8; // Número predeterminado de semanas a simular
-    private static final double HOURS_PER_WEEK = 168.0; // Horas totales en una semana
+    private static final int DEFAULT_WEEKS_TO_SIMULATE = 1; // Número predeterminado de semanas a simular (1 semana)
+    private static final double MINUTES_PER_WEEK = 4200.0; // Minutos totales en una semana (10h/día * 7 días * 60 min)
 
     // Constructor de la clase SimulationEngine
     public SimulationEngine() {
@@ -64,13 +66,16 @@ public class SimulationEngine {
 
         this.locations = new ConcurrentHashMap<>(); // Inicializar mapa de ubicaciones
         this.locationHoldTimes = new ConcurrentHashMap<>(); // Inicializar mapa de tiempos de retención
+        this.operators = new ConcurrentHashMap<>(); // Inicializar mapa de operadores
+        this.joinOperations = new ConcurrentHashMap<>(); // Inicializar operaciones JOIN
+        this.almacenajeAccumulator = new ConcurrentHashMap<>(); // Inicializar acumulador ALMACENAJE
         this.pathNetwork = new PathNetwork(); // Crear nueva red de rutas
         this.shiftCalendar = new ShiftCalendar(); // Crear nuevo calendario de turnos
         this.pendingMachineWakeups = ConcurrentHashMap.newKeySet(); // Inicializar conjunto de despertares pendientes
-        this.pendingCraneTransfers = new ConcurrentLinkedQueue<>(); // Inicializar cola de transferencias
+        this.pendingOperatorTransfers = new ConcurrentLinkedQueue<>(); // Inicializar cola de transferencias
         this.statistics = new Statistics(); // Crear nuevo objeto de estadísticas
-        this.allValves = Collections.synchronizedList(new ArrayList<>()); // Crear lista sincronizada de válvulas
-        this.completedValves = Collections.synchronizedList(new ArrayList<>()); // Crear lista sincronizada de válvulas completadas
+        this.allValves = Collections.synchronizedList(new ArrayList<>()); // Crear lista sincronizada de entidades
+        this.completedValves = Collections.synchronizedList(new ArrayList<>()); // Crear lista sincronizada de entidades completadas
         this.dockToAlmacenMoves = 0; // Inicializar contador de movimientos
         this.lastOperationalTime = 0.0; // Inicializar último tiempo operacional
         this.lastSampleTime = 0.0; // Inicializar último tiempo de muestreo
@@ -79,115 +84,164 @@ public class SimulationEngine {
         int configuredWeeks = config.getSimulationWeeks(); // Obtener semanas configuradas
         this.weeksToSimulate = configuredWeeks > 0 ? configuredWeeks : DEFAULT_WEEKS_TO_SIMULATE; // Usar semanas configuradas o valor predeterminado
 
-        int firstWorkingHour = shiftCalendar.getFirstWorkingHourOfWeek(); // Obtener primera hora laboral de la semana
-        int lastWorkingHourExclusive = shiftCalendar.getLastWorkingHourExclusive(); // Obtener última hora laboral (exclusiva)
-        double weeklySpan = Math.max(0.0, lastWorkingHourExclusive - firstWorkingHour); // Calcular duración de horas laborales por semana
-        if (weeklySpan <= 0.0) { // Si no hay horas laborales válidas
-            weeklySpan = HOURS_PER_WEEK; // Usar semana completa
-        }
-        this.endTime = ((weeksToSimulate - 1) * HOURS_PER_WEEK) + weeklySpan; // Calcular tiempo final de simulación
+        // Para cerveza: 10 horas diarias * 7 días * 60 minutos = 4200 minutos por semana
+        double minutesPerDay = 600.0; // 10 horas * 60 minutos
+        double daysPerWeek = 7.0;
+        double weeklySpan = minutesPerDay * daysPerWeek; // 4200 minutos
+        this.endTime = weeksToSimulate * weeklySpan; // Calcular tiempo final de simulación en minutos
 
         initializeLocations(); // Inicializar todas las ubicaciones
-        initializeCrane(); // Inicializar la grúa
-        scheduleArrivals(); // Programar llegadas de válvulas
+        initializeOperators(); // Inicializar los 4 operadores + 1 camión
+        initializeJoinOperations(); // Inicializar operaciones JOIN
+        scheduleArrivals(); // Programar llegadas de entidades
         scheduleStatisticsSampling(); // Programar muestreo de estadísticas
     }
 
-    // Método para inicializar todas las ubicaciones del sistema
+    // Método para inicializar todas las ubicaciones del sistema de cervecería
     private void initializeLocations() {
         Config config = Config.getInstance(); // Obtener instancia de configuración
         locationHoldTimes.clear(); // Limpiar tiempos de retención previos
-        int m1Units = Math.max(1, config.getMachineUnits("m1")); // Obtener número de unidades M1 (mínimo 1)
-        int m2Units = Math.max(1, config.getMachineUnits("m2")); // Obtener número de unidades M2 (mínimo 1)
-        int m3Units = Math.max(1, config.getMachineUnits("m3")); // Obtener número de unidades M3 (mínimo 1)
 
-        // Leer capacidades de almacenes desde config
-        int almacenM1Cap = config.getInt("location.almacen_m1.capacity", 20); // Capacidad almacén M1 (predeterminado 20)
-        int almacenM2Cap = config.getInt("location.almacen_m2.capacity", 20); // Capacidad almacén M2 (predeterminado 20)
-        int almacenM3Cap = config.getInt("location.almacen_m3.capacity", 30); // Capacidad almacén M3 (predeterminado 30)
+        // PROCESO DE GRANOS DE CEBADA (Proceso Principal)
+        locations.put("SILO_GRANDE", new Location("SILO_GRANDE", 3, 1, new Point(100, 100)));
+        locationHoldTimes.put("SILO_GRANDE", 0.0);
+        
+        locations.put("MALTEADO", new Location("MALTEADO", 3, 1, new Point(250, 100)));
+        locationHoldTimes.put("MALTEADO", 0.0);
+        
+        locations.put("SECADO", new Location("SECADO", 3, 1, new Point(400, 100)));
+        locationHoldTimes.put("SECADO", 0.0);
+        
+        locations.put("MOLIENDA", new Location("MOLIENDA", 2, 1, new Point(550, 100)));
+        locationHoldTimes.put("MOLIENDA", 0.0);
+        
+        locations.put("MACERADO", new Location("MACERADO", 3, 1, new Point(700, 100)));
+        locationHoldTimes.put("MACERADO", 0.0);
+        
+        locations.put("FILTRADO", new Location("FILTRADO", 2, 1, new Point(850, 100)));
+        locationHoldTimes.put("FILTRADO", 0.0);
 
-        // Create locations with exact ProModel specifications
-        locations.put("DOCK", new Location("DOCK", Integer.MAX_VALUE, 1, // Crear ubicación DOCK con capacidad infinita
-            new Point(190, 140))); // Posición del DOCK
-        locationHoldTimes.put("DOCK", config.getDouble("location.dock.hold_time", 0.0)); // Tiempo de retención en DOCK
-        locations.put("STOCK", new Location("STOCK", Integer.MAX_VALUE, 1, // Crear ubicación STOCK con capacidad infinita
-            new Point(200, 420))); // Posición del STOCK
-        locationHoldTimes.put("STOCK", config.getDouble("location.stock.hold_time", 0.0)); // Tiempo de retención en STOCK
+        // PROCESO DE LÚPULO
+        locations.put("SILO_LUPULO", new Location("SILO_LUPULO", 10, 1, new Point(100, 250)));
+        locationHoldTimes.put("SILO_LUPULO", 0.0);
 
-        locations.put("Almacen_M1", new Location("Almacen_M1", almacenM1Cap, 1, // Crear almacén M1 con capacidad configurada
-            new Point(560, 520))); // Posición del almacén M1
-        locationHoldTimes.put("Almacen_M1", config.getDouble("location.almacen_m1.hold_time", 0.0)); // Tiempo de retención en almacén M1
-        // M1 parent - SOLO para enrutamiento, no procesa válvulas
-        // Capacidad 0 para que las válvulas vayan directo a M1.x
-        locations.put("M1", new Location("M1", 0, m1Units, // Crear ubicación padre M1 (solo enrutamiento)
-            new Point(560, 380))); // Posición de M1
-        // Individual M1 units - ESTAS procesan las válvulas
-        for (int i = 1; i <= m1Units; i++) { // Iterar por cada unidad de M1
-            locations.put("M1." + i, new Location("M1." + i, 1, 1, // Crear unidad individual M1.i
-                new Point(560, 380))); // Posición de la unidad
-            pathNetwork.registerLocationNode("M1." + i, pathNetwork.getNodeForLocation("M1")); // Registrar nodo en la red de rutas
-        }
+        // COCCIÓN (JOIN: 1 kg granos + 4 kg lúpulo = Mosto)
+        locations.put("COCCION", new Location("COCCION", 10, 1, new Point(1000, 150)));
+        locationHoldTimes.put("COCCION", 0.0);
 
-        locations.put("Almacen_M2", new Location("Almacen_M2", almacenM2Cap, 1, // Crear almacén M2 con capacidad configurada
-            new Point(960, 320))); // Posición del almacén M2
-        locationHoldTimes.put("Almacen_M2", config.getDouble("location.almacen_m2.hold_time", 0.0)); // Tiempo de retención en almacén M2
-        // M2 parent - SOLO para enrutamiento
-        locations.put("M2", new Location("M2", 0, m2Units, // Crear ubicación padre M2 (solo enrutamiento)
-            new Point(760, 300))); // Posición de M2
-        for (int i = 1; i <= m2Units; i++) { // Iterar por cada unidad de M2
-            locations.put("M2." + i, new Location("M2." + i, 1, 1, // Crear unidad individual M2.i
-                new Point(760, 300))); // Posición de la unidad
-            pathNetwork.registerLocationNode("M2." + i, pathNetwork.getNodeForLocation("M2")); // Registrar nodo en la red de rutas
-        }
+        // PROCESO POST-COCCIÓN
+        locations.put("ENFRIAMIENTO", new Location("ENFRIAMIENTO", 10, 1, new Point(1150, 150)));
+        locationHoldTimes.put("ENFRIAMIENTO", 0.0);
 
-        locations.put("Almacen_M3", new Location("Almacen_M3", almacenM3Cap, 1, // Crear almacén M3 con capacidad configurada
-            new Point(1080, 180))); // Posición del almacén M3
-        locationHoldTimes.put("Almacen_M3", config.getDouble("location.almacen_m3.hold_time", 0.0)); // Tiempo de retención en almacén M3
-        // M3 parent - SOLO para enrutamiento
-        locations.put("M3", new Location("M3", 0, m3Units, // Crear ubicación padre M3 (solo enrutamiento)
-            new Point(900, 160))); // Posición de M3
-        for (int i = 1; i <= m3Units; i++) { // Iterar por cada unidad de M3
-            locations.put("M3." + i, new Location("M3." + i, 1, 1, // Crear unidad individual M3.i
-                new Point(900, 160))); // Posición de la unidad
-            pathNetwork.registerLocationNode("M3." + i, pathNetwork.getNodeForLocation("M3")); // Registrar nodo en la red de rutas
-        }
+        // PROCESO DE LEVADURA
+        locations.put("SILO_LEVADURA", new Location("SILO_LEVADURA", 10, 1, new Point(1150, 300)));
+        locationHoldTimes.put("SILO_LEVADURA", 0.0);
+
+        // FERMENTACIÓN (JOIN: 10 L mosto + 2 kg levadura = Cerveza)
+        locations.put("FERMENTACION", new Location("FERMENTACION", 10, 1, new Point(1300, 200)));
+        locationHoldTimes.put("FERMENTACION", 0.0);
+
+        // PROCESO FINAL DE CERVEZA
+        locations.put("MADURACION", new Location("MADURACION", 10, 1, new Point(1450, 200)));
+        locationHoldTimes.put("MADURACION", 0.0);
+        
+        locations.put("INSPECCION", new Location("INSPECCION", 3, 1, new Point(1600, 200)));
+        locationHoldTimes.put("INSPECCION", 0.0);
+        
+        locations.put("EMBOTELLADO", new Location("EMBOTELLADO", 6, 1, new Point(1600, 350)));
+        locationHoldTimes.put("EMBOTELLADO", 0.0);
+        
+        locations.put("ETIQUETADO", new Location("ETIQUETADO", 6, 1, new Point(1600, 500)));
+        locationHoldTimes.put("ETIQUETADO", 0.0);
+
+        // PROCESO DE CAJAS
+        locations.put("ALMACEN_CAJAS", new Location("ALMACEN_CAJAS", 30, 1, new Point(1450, 650)));
+        locationHoldTimes.put("ALMACEN_CAJAS", 0.0);
+
+        // EMPACADO (JOIN: 6 botellas + 1 caja = Caja con cervezas)
+        locations.put("EMPACADO", new Location("EMPACADO", 1, 1, new Point(1600, 650)));
+        locationHoldTimes.put("EMPACADO", 0.0);
+
+        // ALMACENAJE Y SALIDA
+        locations.put("ALMACENAJE", new Location("ALMACENAJE", 6, 1, new Point(1450, 800)));
+        locationHoldTimes.put("ALMACENAJE", 0.0);
+        
+        locations.put("MERCADO", new Location("MERCADO", Integer.MAX_VALUE, 1, new Point(1600, 950)));
+        locationHoldTimes.put("MERCADO", 0.0);
     }
 
-    // Método para inicializar la grúa
-    private void initializeCrane() {
-        Point home = locations.get("DOCK").getPosition(); // Obtener posición inicial (DOCK)
-        // Speeds: empty=15.24 m/min, full=12.19 m/min (from ProModel)
-        crane = new Crane("Grua", 1, 15.24, 12.19, home); // Crear grúa con velocidades vacía y cargada
+    // Método para inicializar los operadores del sistema de cervecería
+    private void initializeOperators() {
+        // OPERADOR RECEPCIÓN: Mueve granos entre MALTEADO → SECADO → MOLIENDA
+        Point homeRecepcion = locations.get("MALTEADO").getPosition();
+        operators.put("OPERADOR_RECEPCION", new Operator("Operador Recepcion", 1, 90.0, "RED_RECEPCION", homeRecepcion));
+        
+        // OPERADOR LÚPULO: Mueve lúpulo de SILO_LUPULO → COCCION
+        Point homeLupulo = locations.get("SILO_LUPULO").getPosition();
+        operators.put("OPERADOR_LUPULO", new Operator("Operador Lupulo", 1, 100.0, "RED_LUPULO", homeLupulo));
+        
+        // OPERADOR LEVADURA: Mueve levadura de SILO_LEVADURA → FERMENTACION
+        Point homeLevadura = locations.get("SILO_LEVADURA").getPosition();
+        operators.put("OPERADOR_LEVADURA", new Operator("Operador Levadura", 1, 100.0, "RED_LEVADURA", homeLevadura));
+        
+        // OPERADOR EMPACADO: Mueve cajas de EMPACADO → ALMACENAJE
+        Point homeEmpacado = locations.get("EMPACADO").getPosition();
+        operators.put("OPERADOR_EMPACADO", new Operator("Operador Empacado", 1, 100.0, "RED_EMPACADO", homeEmpacado));
+        
+        // CAMIÓN: Mueve cajas de ALMACENAJE → MERCADO (ACCUM 6)
+        Point homeCamion = locations.get("ALMACENAJE").getPosition();
+        operators.put("CAMION", new Operator("Camion", 1, 100.0, "RED_EMPACADO", homeCamion));
+    }
+    
+    // Método para inicializar las operaciones JOIN
+    private void initializeJoinOperations() {
+        // JOIN COCCION: 1 GRANOS_CEBADA + 4 LUPULO → MOSTO
+        Map<Valve.Type, Integer> coccionRequirements = new HashMap<>();
+        coccionRequirements.put(Valve.Type.GRANOS_CEBADA, 1);
+        coccionRequirements.put(Valve.Type.LUPULO, 4);
+        joinOperations.put("COCCION", new JoinOperation("COCCION", coccionRequirements, Valve.Type.MOSTO));
+        
+        // JOIN FERMENTACION: 10 MOSTO + 2 LEVADURA → CERVEZA
+        Map<Valve.Type, Integer> fermentacionRequirements = new HashMap<>();
+        fermentacionRequirements.put(Valve.Type.MOSTO, 10);
+        fermentacionRequirements.put(Valve.Type.LEVADURA, 2);
+        joinOperations.put("FERMENTACION", new JoinOperation("FERMENTACION", fermentacionRequirements, Valve.Type.CERVEZA));
+        
+        // JOIN EMPACADO: 6 BOTELLA_CERVEZA + 1 CAJA_VACIA → CAJA_CERVEZA
+        Map<Valve.Type, Integer> empacadoRequirements = new HashMap<>();
+        empacadoRequirements.put(Valve.Type.BOTELLA_CERVEZA, 6);
+        empacadoRequirements.put(Valve.Type.CAJA_VACIA, 1);
+        joinOperations.put("EMPACADO", new JoinOperation("EMPACADO", empacadoRequirements, Valve.Type.CAJA_CERVEZA));
     }
 
-    // Método para programar llegadas de válvulas
+    // Método para programar llegadas de entidades (arribos continuos según frecuencia)
     private void scheduleArrivals() {
-        // Schedule arrivals every 168 hours (weekly)
-        // CRÍTICO: Las válvulas llegan TODAS AL INICIO de cada semana
-        for (int week = 0; week < weeksToSimulate; week++) { // Iterar por cada semana a simular
-            double arrivalTime = week * HOURS_PER_WEEK; // Calcular tiempo de llegada (inicio de semana)
-
-            // Ajustar al primer turno laboral de la semana
-            if (!shiftCalendar.isWorkingTime(arrivalTime)) { // Si no es hora laboral
-                arrivalTime = shiftCalendar.getNextWorkingTime(arrivalTime); // Ajustar a próxima hora laboral
-            }
-
-            // Schedule each valve type according to ProModel
-            scheduleValveArrivals(Valve.Type.VALVULA_1, 10, arrivalTime); // Programar 10 válvulas tipo 1
-            scheduleValveArrivals(Valve.Type.VALVULA_2, 40, arrivalTime); // Programar 40 válvulas tipo 2
-            scheduleValveArrivals(Valve.Type.VALVULA_3, 10, arrivalTime); // Programar 10 válvulas tipo 3
-            scheduleValveArrivals(Valve.Type.VALVULA_4, 20, arrivalTime); // Programar 20 válvulas tipo 4
-        }
+        // GRANOS DE CEBADA: cada 25 minutos a SILO_GRANDE
+        scheduleEntityArrivals(Valve.Type.GRANOS_CEBADA, 25.0, "SILO_GRANDE");
+        
+        // LÚPULO: cada 10 minutos a SILO_LUPULO
+        scheduleEntityArrivals(Valve.Type.LUPULO, 10.0, "SILO_LUPULO");
+        
+        // LEVADURA: cada 20 minutos a SILO_LEVADURA
+        scheduleEntityArrivals(Valve.Type.LEVADURA, 20.0, "SILO_LEVADURA");
+        
+        // CAJAS VACÍAS: cada 30 minutos a ALMACEN_CAJAS
+        scheduleEntityArrivals(Valve.Type.CAJA_VACIA, 30.0, "ALMACEN_CAJAS");
     }
 
-    // Método para programar llegadas de un tipo específico de válvula
-    private void scheduleValveArrivals(Valve.Type type, int quantity, double time) {
-        // TODAS las válvulas llegan exactamente al mismo tiempo
-        // ProModel: "Primera Vez 0" significa todas llegan al inicio
-        for (int i = 0; i < quantity; i++) { // Iterar por la cantidad especificada
-            Valve valve = new Valve(type, time); // Crear nueva válvula del tipo especificado
-            allValves.add(valve); // Agregar válvula a la lista de todas las válvulas
-            eventQueue.add(new Event(Event.Type.ARRIVAL, time, valve, null)); // Programar evento de llegada
+    // Método para programar llegadas de un tipo específico de entidad con frecuencia
+    private void scheduleEntityArrivals(Valve.Type type, double frequency, String arrivalLocation) {
+        // Calcular número de arribos durante la simulación
+        int numArrivals = (int) Math.ceil(endTime / frequency);
+        
+        for (int i = 0; i < numArrivals; i++) {
+            double arrivalTime = i * frequency; // Tiempo de arribo (Primera Vez 0)
+            
+            if (arrivalTime >= endTime) break; // No programar más allá del tiempo final
+            
+            Valve entity = new Valve(type, arrivalTime); // Crear nueva entidad
+            allValves.add(entity); // Agregar a la lista de todas las entidades
+            eventQueue.add(new Event(Event.Type.ARRIVAL, arrivalTime, entity, arrivalLocation)); // Programar evento de llegada
         }
     }
 
@@ -216,9 +270,10 @@ public class SimulationEngine {
                 }
             }
 
-            // ESPERAR mientras la animación de la grúa está en progreso
+            // ESPERAR mientras algún operador está en movimiento
             // Esto hace que la simulación se RALENTICE para que la animación sea visible
-            if (crane.isMoving() && animationSpeed < 100) { // Si la grúa está en movimiento y velocidad < 100
+            boolean anyOperatorMoving = operators.values().stream().anyMatch(Operator::isMoving);
+            if (anyOperatorMoving && animationSpeed < 100) { // Si algún operador está en movimiento y velocidad < 100
                 try {
                     Thread.sleep(getAnimationWaitMillis()); // Esperar según velocidad de animación
                     continue; // Continuar al siguiente ciclo
@@ -281,12 +336,14 @@ public class SimulationEngine {
             case START_CRANE_MOVE: // Si es inicio de movimiento de grúa
                 handleStartCraneMove(event.getValve(), (String) event.getData()); // Manejar inicio de movimiento
                 break; // Salir del switch
-            case END_CRANE_MOVE: // Si es fin de movimiento de grúa
+            case END_CRANE_MOVE: // Si es fin de movimiento de operador
                 // Esperar a que la animación termine antes de procesar
                 if (animationSpeed < 100) { // Si velocidad de animación < 100
-                    while (crane.isMoving()) { // Mientras la grúa esté en movimiento
+                    boolean anyOperatorMoving = operators.values().stream().anyMatch(Operator::isMoving);
+                    while (anyOperatorMoving) { // Mientras algún operador esté en movimiento
                         try {
                             Thread.sleep(getAnimationWaitMillis()); // Esperar según velocidad de animación
+                            anyOperatorMoving = operators.values().stream().anyMatch(Operator::isMoving);
                         } catch (InterruptedException e) { // Capturar interrupción
                             break; // Salir del bucle
                         }
@@ -307,84 +364,158 @@ public class SimulationEngine {
         }
     }
 
-    // Método para manejar la llegada de una válvula
-    private void handleArrival(Valve valve) {
-        Location dock = locations.get("DOCK"); // Obtener ubicación DOCK
-        dock.addToQueue(valve); // Agregar válvula a la cola del DOCK
-        updateLocationMetrics(dock); // Actualizar métricas de la ubicación
-        valve.setState(Valve.State.IN_QUEUE); // Establecer estado de la válvula en cola
-        valve.setCurrentLocation(dock); // Establecer ubicación actual de la válvula
-        applyHoldTime(valve, dock.getName(), currentTime); // Aplicar tiempo de retención
-        valve.startWaiting(currentTime); // Comenzar a contar tiempo de espera
-        statistics.recordArrival(valve); // Registrar llegada en estadísticas
+    // Método para manejar la llegada de una entidad (modificado para cervecería)
+    private void handleArrival(Valve entity) {
+        // Obtener la locación de arribo del evento (pasada como data en Event)
+        Event currentEvent = eventQueue.stream()
+            .filter(e -> e.getType() == Event.Type.ARRIVAL && e.getValve() == entity)
+            .findFirst().orElse(null);
+        
+        String arrivalLocationName = entity.getNextLocation(); // Primera locación en su ruta
+        if (arrivalLocationName == null) {
+            arrivalLocationName = "SILO_GRANDE"; // Por defecto
+        }
+        
+        Location arrivalLocation = locations.get(arrivalLocationName);
+        if (arrivalLocation == null) {
+            return; // Ubicación no existe
+        }
+        
+        arrivalLocation.addToQueue(entity); // Agregar entidad a la cola de la locación
+        updateLocationMetrics(arrivalLocation); // Actualizar métricas de la ubicación
+        entity.setState(Valve.State.IN_QUEUE); // Establecer estado en cola
+        entity.setCurrentLocation(arrivalLocation); // Establecer ubicación actual
+        statistics.recordArrival(entity); // Registrar llegada en estadísticas
 
-        // INMEDIATAMENTE intentar programar movimiento de grúa
-        tryScheduleCraneMove(); // Intentar programar movimiento de grúa
-
-        // If crane didn't start (outside shift), schedule wakeup
-        if (!crane.isBusy() && !shiftCalendar.isWorkingTime(currentTime) && dock.getQueueSize() > 0) { // Si grúa no está ocupada, fuera de turno y hay válvulas en DOCK
-            scheduleCraneWakeup(); // Programar despertar de grúa
+        // Si la locación tiene procesamiento, programar inicio
+        double processTime = entity.getCurrentProcessingTime();
+        if (processTime > 0 && arrivalLocation.hasAvailableUnit()) {
+            arrivalLocation.moveToProcessing(entity);
+            entity.startProcessing(currentTime);
+            updateLocationMetrics(arrivalLocation);
+            eventQueue.add(new Event(Event.Type.END_PROCESSING, currentTime + processTime, entity, null));
         }
     }
 
-    // Método para manejar el fin de procesamiento de una válvula
-    private void handleEndProcessing(Valve valve) {
-        Location machineUnit = valve.getCurrentLocation(); // Obtener ubicación actual (máquina)
-        valve.endProcessing(currentTime); // Finalizar procesamiento
-        valve.advanceStep(); // Avanzar al siguiente paso del proceso
-
-        // Incrementar contador de válvulas procesadas para esta ubicación
-        if (machineUnit != null) { // Si hay ubicación
-            String unitName = machineUnit.getName(); // Obtener nombre de la unidad
-            String machineBaseName = unitName.contains(".") ? unitName.substring(0, unitName.indexOf(".")) : unitName; // Extraer nombre base de máquina
-            LocationStats machineStats = statistics.getOrCreateLocationStats(machineBaseName); // Obtener o crear estadísticas de ubicación
-            machineStats.incrementValvesProcessed(); // Incrementar contador de válvulas procesadas
+    // Método para manejar el fin de procesamiento de una entidad
+    private void handleEndProcessing(Valve entity) {
+        Location currentLoc = entity.getCurrentLocation(); // Obtener ubicación actual
+        entity.endProcessing(currentTime); // Finalizar procesamiento
+        
+        // Incrementar contador de entidades procesadas para esta ubicación
+        if (currentLoc != null) { // Si hay ubicación
+            String locName = currentLoc.getName();
+            LocationStats locStats = statistics.getOrCreateLocationStats(locName);
+            locStats.incrementValvesProcessed();
         }
 
-        // Verificar si hay espacio en destino ANTES de liberar máquina
-        String destination = getNextDestination(valve); // Obtener próximo destino
-        Location destLoc = destination != null ? locations.get(destination) : null; // Obtener ubicación de destino
-
-        if (destLoc != null && !destLoc.canAccept()) { // Si destino existe pero no puede aceptar
-            // BLOQUEADO: Destino lleno, válvula permanece en máquina (ProModel Blk 1)
-            valve.setState(Valve.State.BLOCKED); // Establecer estado bloqueado
-            valve.startBlocked(currentTime); // Comenzar tiempo de bloqueo
-            // NO remover de machineUnit, permanece ocupando espacio
-            return; // NO liberar máquina ni programar grúa
+        String locName = currentLoc != null ? currentLoc.getName() : "";
+        
+        // Manejar casos especiales según la ubicación
+        if ("COCCION".equals(locName) || "FERMENTACION".equals(locName) || "EMPACADO".equals(locName)) {
+            // Operación JOIN
+            handleJoinOperation(entity, locName);
+        } else if ("INSPECCION".equals(locName)) {
+            // Inspección con probabilidad 90%/10%
+            handleInspection(entity);
+        } else if ("ALMACENAJE".equals(locName)) {
+            // ACCUM 6 para ALMACENAJE
+            handleAlmacenajeAccumulation(entity);
+        } else {
+            // Procesamiento normal: avanzar a siguiente ubicación
+            entity.advanceStep();
+            currentLoc.removeValve(entity);
+            updateLocationMetrics(currentLoc);
+            
+            // Programar para movimiento
+            pendingOperatorTransfers.add(entity);
+            tryScheduleOperatorMove();
         }
-
-        // Destino tiene espacio: remover de la máquina
-        if (machineUnit != null) { // Si hay máquina
-            machineUnit.removeValve(valve); // Remover válvula de la máquina
-            updateLocationMetrics(machineUnit); // Actualizar métricas
+    }
+    
+    // Método para manejar operaciones JOIN
+    private void handleJoinOperation(Valve entity, String locationName) {
+        JoinOperation join = joinOperations.get(locationName);
+        if (join == null) {
+            return;
         }
-
-        // Machine unit holds the valve temporarily; crane will pick it up
-        valve.setCurrentLocation(machineUnit); // Mantener ubicación actual temporalmente
-        if (machineUnit != null) { // Si hay máquina
-            applyHoldTime(valve, machineUnit.getName(), currentTime); // Aplicar tiempo de retención
+        
+        Location loc = locations.get(locationName);
+        if (loc != null) {
+            loc.removeValve(entity);
+            updateLocationMetrics(loc);
         }
-        valve.startWaiting(currentTime); // Comenzar tiempo de espera
-
-        // ALTA PRIORIDAD: Válvulas que terminaron procesamiento
-        pendingCraneTransfers.add(valve); // Agregar a cola de transferencias pendientes
-
-        // Free machine capacity for next valve
-        String unitName = machineUnit != null ? machineUnit.getName() : ""; // Obtener nombre de unidad
-        String machineBaseName = unitName.contains(".") ? unitName.substring(0, unitName.indexOf(".")) : unitName; // Extraer nombre base
-        String almacenName = "Almacen_" + machineBaseName; // Construir nombre de almacén
-        Location almacen = locations.get(almacenName); // Obtener ubicación de almacén
-        Location machineParent = locations.get(machineBaseName); // Obtener ubicación padre de máquina
-        if (almacen != null && machineParent != null) { // Si ambas ubicaciones existen
-            checkMachineQueue(machineParent, almacen); // Verificar cola de máquina
+        
+        // Agregar entidad a la operación JOIN
+        boolean ready = join.addEntity(entity);
+        
+        if (ready) {
+            // Ejecutar JOIN y crear nueva entidad
+            Valve newEntity = join.execute(currentTime);
+            if (newEntity != null) {
+                newEntity.setCurrentLocation(loc);
+                allValves.add(newEntity);
+                
+                // Programar procesamiento de la nueva entidad
+                Double processTime = newEntity.getCurrentProcessingTime();
+                if (processTime != null && processTime > 0) {
+                    newEntity.startProcessing(currentTime);
+                    eventQueue.add(new Event(Event.Type.END_PROCESSING, 
+                        currentTime + processTime, newEntity, null));
+                } else {
+                    // Sin procesamiento adicional, mover directamente
+                    pendingOperatorTransfers.add(newEntity);
+                    tryScheduleOperatorMove();
+                }
+            }
         }
-
-        // CRÍTICO: Verificar válvulas bloqueadas SIEMPRE después de procesar
-        // El almacén puede tener espacio temporalmente antes de checkMachineQueue
-        checkBlockedValves(); // Verificar válvulas bloqueadas
-
-        // INMEDIATAMENTE intentar mover con grúa
-        tryScheduleCraneMove(); // Intentar programar movimiento de grúa
+    }
+    
+    // Método para manejar inspección (90% aprueba, 10% rechaza)
+    private void handleInspection(Valve entity) {
+        Location inspeccionLoc = locations.get("INSPECCION");
+        if (inspeccionLoc != null) {
+            inspeccionLoc.removeValve(entity);
+            updateLocationMetrics(inspeccionLoc);
+        }
+        
+        double random = Math.random();
+        if (random < 0.9) {
+            // 90% aprobado → continúa a EMBOTELLADO
+            entity.advanceStep();
+            pendingOperatorTransfers.add(entity);
+            tryScheduleOperatorMove();
+        } else {
+            // 10% rechazado → EXIT (MERCADO)
+            entity.setState(Valve.State.COMPLETED);
+            completedValves.add(entity);
+            statistics.recordCompletion(entity, currentTime);
+        }
+    }
+    
+    // Método para manejar acumulación en ALMACENAJE (ACCUM 6)
+    private void handleAlmacenajeAccumulation(Valve entity) {
+        Location almacenajeLoc = locations.get("ALMACENAJE");
+        if (almacenajeLoc != null) {
+            almacenajeLoc.removeValve(entity);
+            updateLocationMetrics(almacenajeLoc);
+        }
+        
+        // Acumular cajas de cerveza
+        Valve.Type type = entity.getType();
+        almacenajeAccumulator.put(type, almacenajeAccumulator.getOrDefault(type, 0) + 1);
+        
+        // Si alcanzamos 6 cajas, enviar al camión
+        if (almacenajeAccumulator.get(type) >= 6) {
+            almacenajeAccumulator.put(type, almacenajeAccumulator.get(type) - 6);
+            
+            // Crear batch de 6 cajas para el camión
+            for (int i = 0; i < 6; i++) {
+                entity.advanceStep();
+                pendingOperatorTransfers.add(entity);
+            }
+            tryScheduleOperatorMove();
+        }
     }
 
     // Método para verificar y procesar cola de máquina
@@ -443,8 +574,8 @@ public class SimulationEngine {
         // No importa si el almacén quedó lleno después de mover válvulas,
         // puede haber válvulas en DOCK esperando ir a OTROS almacenes (M2, M3)
         checkBlockedValves(); // Verificar válvulas bloqueadas
-        if (!crane.isBusy() && shiftCalendar.isWorkingTime(currentTime)) { // Si grúa no está ocupada y es hora laboral
-            tryScheduleCraneMove(); // Intentar programar movimiento de grúa
+        if (shiftCalendar.isWorkingTime(currentTime)) { // Si es hora laboral
+            tryScheduleOperatorMove(); // Intentar programar movimiento de operador
         }
     }
 
@@ -491,7 +622,7 @@ public class SimulationEngine {
                         valve.setCurrentLocation(location); // Mantener ubicación temporalmente
                         applyHoldTime(valve, location.getName(), currentTime); // Aplicar tiempo de retención
                         valve.startWaiting(currentTime); // Comenzar tiempo de espera
-                        pendingCraneTransfers.add(valve); // Agregar a transferencias pendientes
+                        pendingOperatorTransfers.add(valve); // Agregar a transferencias pendientes
 
                         // Liberar espacio para siguiente válvula
                         String unitName = location.getName(); // Obtener nombre de ubicación
@@ -511,12 +642,7 @@ public class SimulationEngine {
     }
 
     // Método para programar despertar de grúa
-    private void scheduleCraneWakeup() {
-        double wakeTime = shiftCalendar.getNextWorkingTime(currentTime); // Obtener próximo tiempo laboral
-        if (wakeTime > currentTime) { // Si es tiempo futuro
-            eventQueue.add(new Event(Event.Type.SHIFT_START, wakeTime, null, "CRANE")); // Programar evento de inicio de turno para grúa
-        }
-    }
+    // Método eliminado: scheduleCraneWakeup (obsoleto con operadores)
 
     // Método para manejar inicio de turno
     private void handleShiftStart(String machineName) {
@@ -524,9 +650,9 @@ public class SimulationEngine {
             return; // Salir del método
         }
 
-        // Special case: crane wakeup
-        if ("CRANE".equals(machineName)) { // Si es despertar de grúa
-            tryScheduleCraneMove(); // Intentar programar movimiento
+        // Special case: operator wakeup
+        if ("OPERATOR".equals(machineName)) { // Si es despertar de operadores
+            tryScheduleOperatorMove(); // Intentar programar movimiento
             return; // Salir del método
         }
 
@@ -541,92 +667,40 @@ public class SimulationEngine {
             return; // Salir del método
         }
         checkMachineQueue(machineParent, almacen); // Verificar cola de máquina
-        tryScheduleCraneMove(); // Intentar programar movimiento de grúa
+        tryScheduleOperatorMove(); // Intentar programar movimiento de operador
     }
 
     // Método para intentar programar movimiento de grúa
-    private void tryScheduleCraneMove() {
-        if (crane.isBusy()) { // Si grúa está ocupada
-            return; // Salir del método
+    private void tryScheduleOperatorMove() {
+        if (!shiftCalendar.isWorkingTime(currentTime)) { // Si no es hora laboral
+            return; // Los operadores no trabajan fuera de turno
         }
 
-        // PRIORIDAD 1: Válvulas que terminaron procesamiento (liberan máquinas)
-        Valve valveToMove = pollPendingCraneTransfer(); // Buscar válvula pendiente de transferencia
-        boolean pendingFromMachine = valveToMove != null; // Indicador si proviene de máquina
-
-        // PRIORIDAD 2: Válvulas en DOCK esperando (ProModel FIRST 1 = primera DISPONIBLE)
-        if (valveToMove == null) { // Si no hay válvula de máquina
-            if (!shiftCalendar.isWorkingTime(currentTime)) { // Si no es hora laboral
-                return; // Fuera de turno sólo atendemos descargas de máquinas
-            }
-            valveToMove = findFirstAvailableValveInDock(); // Buscar primera válvula disponible en DOCK
-        }
-
-        if (valveToMove != null) { // Si hay válvula para mover
-            if (!shiftCalendar.isWorkingTime(currentTime) && !pendingFromMachine) { // Si fuera de turno y no es de máquina
-                return; // Salir del método
-            }
-            String destination = getNextDestination(valveToMove); // Obtener destino
+        // Intentar mover entidades pendientes de transferencia
+        Valve entityToMove = pollPendingOperatorTransfer(); // Buscar entidad pendiente
+        
+        if (entityToMove != null) { // Si hay entidad para mover
+            String destination = getNextDestination(entityToMove); // Obtener destino
             Location destLoc = locations.get(destination); // Obtener ubicación de destino
 
             if (destLoc != null && destLoc.canAccept()) { // Si destino existe y puede aceptar
-                scheduleCraneMove(valveToMove, destination); // Programar movimiento de grúa
+                scheduleOperatorMove(entityToMove, destination); // Programar movimiento de operador
             }
         }
     }
 
-    // Método para buscar primera válvula disponible en DOCK
-    private Valve findFirstAvailableValveInDock() {
-        Location dock = locations.get("DOCK"); // Obtener ubicación DOCK
-        if (dock == null || dock.getQueueSize() == 0) { // Si no existe o no hay válvulas
-            return null; // Retornar nulo
-        }
+    // Método eliminado: findFirstAvailableValveInDock (obsoleto con nuevo flujo)
 
-        // Buscar PRIMERA válvula cuyo destino tenga espacio (ProModel FIRST 1)
-        for (Valve valve : dock.getQueueSnapshot()) { // Iterar por válvulas en DOCK
-            if (valve == null) { // Si válvula es nula
-                continue; // Continuar con siguiente
-            }
-            if (!valve.isReady(currentTime)) { // Si válvula no está lista
-                continue; // Continuar con siguiente
-            }
-            String destination = getNextDestination(valve); // Obtener destino
-            Location destLoc = destination != null ? locations.get(destination) : null; // Obtener ubicación de destino
-
-            if (destination == null) { // Si no hay destino
-                continue; // Continuar con siguiente
-            }
-
-            // CRÍTICO: Verificar espacio ANTES de saltarse por estar bloqueada
-            if (destLoc != null && destLoc.canAccept()) { // Si destino puede aceptar
-                // Si estaba bloqueada, desbloquear
-                if (valve.getState() == Valve.State.BLOCKED) { // Si estaba bloqueada
-                    valve.endBlocked(currentTime); // Finalizar bloqueo
-                    valve.setState(Valve.State.IN_QUEUE); // Cambiar estado a en cola
-                }
-                return valve; // Primera disponible
-            } else if (destLoc != null && !destLoc.canAccept()) { // Si destino no puede aceptar
-                // Destino lleno: marcar bloqueada y continuar buscando
-                if (valve.getState() != Valve.State.BLOCKED) { // Si no estaba bloqueada
-                    valve.setState(Valve.State.BLOCKED); // Establecer estado bloqueado
-                    valve.startBlocked(currentTime); // Comenzar tiempo de bloqueo
-                }
-            }
-        }
-
-        return null; // Todas bloqueadas o sin destino válido
-    }
-
-    // Método para obtener y remover válvula pendiente de transferencia
-    private Valve pollPendingCraneTransfer() {
-        // Buscar válvula que necesita transporte desde máquinas
-        Iterator<Valve> iterator = pendingCraneTransfers.iterator(); // Crear iterador
+    // Método para obtener y remover entidad pendiente de transferencia
+    private Valve pollPendingOperatorTransfer() {
+        // Buscar entidad que necesita transporte
+        Iterator<Valve> iterator = pendingOperatorTransfers.iterator(); // Crear iterador
         while (iterator.hasNext()) { // Mientras haya elementos
-            Valve valve = iterator.next(); // Obtener siguiente válvula
-            if (valve == null || !valve.isReady(currentTime)) { // Si es nula o no está lista
+            Valve entity = iterator.next(); // Obtener siguiente entidad
+            if (entity == null || !entity.isReady(currentTime)) { // Si es nula o no está lista
                 continue; // Continuar con siguiente
             }
-            String destination = getNextDestination(valve); // Obtener destino
+            String destination = getNextDestination(entity); // Obtener destino
             if (destination == null) { // Si no hay destino
                 iterator.remove(); // Remover de cola
                 continue; // Continuar con siguiente
@@ -634,45 +708,48 @@ public class SimulationEngine {
             Location destLoc = locations.get(destination); // Obtener ubicación de destino
             if (destLoc != null && destLoc.canAccept()) { // Si destino existe y puede aceptar
                 iterator.remove(); // Remover de cola
-                return valve; // Retornar válvula
+                return entity; // Retornar entidad
             }
         }
-        return null; // No hay válvula disponible
+        return null; // No hay entidad disponible
     }
 
-    // Método para obtener próximo destino de una válvula
-    private String getNextDestination(Valve valve) {
-        Location currentLocation = valve.getCurrentLocation(); // Obtener ubicación actual
+    // Método para obtener próximo destino de una entidad
+    private String getNextDestination(Valve entity) {
+        Location currentLocation = entity.getCurrentLocation(); // Obtener ubicación actual
         if (currentLocation == null) { // Si no hay ubicación
             return null; // Retornar nulo
         }
 
-        if (currentLocation.getName().equals("DOCK")) { // Si está en DOCK
-            return valve.getNextAlmacen(); // Retornar próximo almacén
+        if (entity.isRouteComplete()) { // Si ruta está completa
+            return "MERCADO"; // Retornar MERCADO (EXIT)
         }
 
-        if (valve.isRouteComplete()) { // Si ruta está completa
-            return "STOCK"; // Retornar STOCK
-        }
-
-        return valve.getNextAlmacen(); // Retornar próximo almacén
+        return entity.getNextLocation(); // Retornar próxima ubicación de la ruta
     }
 
-    // Método para programar movimiento de grúa
-    private void scheduleCraneMove(Valve valve, String destination) {
-        crane.setBusy(true); // Establecer grúa como ocupada
-
-        Location from = valve.getCurrentLocation(); // Obtener ubicación origen
+    // Método para programar movimiento de operador
+    private void scheduleOperatorMove(Valve entity, String destination) {
+        Location from = entity.getCurrentLocation(); // Obtener ubicación origen
         Location to = locations.get(destination); // Obtener ubicación destino
 
         if (from == null || to == null) { // Si alguna ubicación no existe
-            crane.setBusy(false); // Liberar grúa
             return; // Salir del método
         }
 
-        // Si válvula estaba bloqueada, terminar bloqueo
-        if (valve.getState() == Valve.State.BLOCKED) { // Si estaba bloqueada
-            valve.endBlocked(currentTime); // Finalizar bloqueo
+        // Determinar qué operador es responsable de este movimiento
+        String operatorKey = getResponsibleOperator(from.getName(), destination);
+        Operator operator = operators.get(operatorKey);
+        
+        if (operator == null || operator.isBusy()) { // Si no hay operador o está ocupado
+            return; // No se puede mover ahora
+        }
+
+        operator.setBusy(true); // Establecer operador como ocupado
+
+        // Si entidad estaba bloqueada, terminar bloqueo
+        if (entity.getState() == Valve.State.BLOCKED) { // Si estaba bloqueada
+            entity.endBlocked(currentTime); // Finalizar bloqueo
         }
 
         PathNetwork.PathResult pathResult = pathNetwork.getPathForLocations(from.getName(), destination); // Obtener ruta entre ubicaciones
@@ -693,93 +770,135 @@ public class SimulationEngine {
             totalDistanceMeters = euclidean; // Distancia total = distancia euclidiana
         }
 
-        double travelTime = crane.calculateTravelTime(totalDistanceMeters, valve != null); // Calcular tiempo de viaje
+        double travelTime = operator.calculateTravelTime(totalDistanceMeters, true); // Calcular tiempo de viaje
 
-        crane.addTravelTime(travelTime); // Agregar tiempo de viaje a grúa
-        valve.addMovementTime(travelTime); // Agregar tiempo de movimiento a válvula
-        valve.endWaiting(currentTime); // Finalizar tiempo de espera
+        operator.addTravelTime(travelTime); // Agregar tiempo de viaje a operador
+        entity.addMovementTime(travelTime); // Agregar tiempo de movimiento a entidad
+        entity.endWaiting(currentTime); // Finalizar tiempo de espera
 
         // Pasar el tiempo actual de simulación y la velocidad de animación
-        crane.startMove(pathPoints, segmentDistances, totalDistanceMeters, travelTime, currentTime, animationSpeed); // Iniciar movimiento de grúa
-
-        if (from.getName().equals("DOCK")) { // Si origen es DOCK
-            dockToAlmacenMoves++; // Incrementar contador de movimientos DOCK a almacén
-        }
+        operator.startMove(pathPoints, segmentDistances, totalDistanceMeters, travelTime, currentTime, animationSpeed); // Iniciar movimiento de operador
 
         eventQueue.add(new Event(Event.Type.START_CRANE_MOVE, // Agregar evento de inicio de movimiento
-            currentTime, valve, destination)); // Con tiempo actual
+            currentTime, entity, destination)); // Con tiempo actual
         eventQueue.add(new Event(Event.Type.END_CRANE_MOVE, // Agregar evento de fin de movimiento
-            currentTime + travelTime, valve, destination)); // Con tiempo actual + tiempo de viaje
+            currentTime + travelTime, entity, destination)); // Con tiempo actual + tiempo de viaje
+    }
+    
+    // Método para determinar qué operador es responsable de un movimiento
+    private String getResponsibleOperator(String from, String to) {
+        // OPERADOR_RECEPCION: Maneja flujo de granos (MALTEADO → SECADO → MOLIENDA)
+        if (from.equals("MALTEADO") || from.equals("SECADO") || from.equals("MOLIENDA")) {
+            return "OPERADOR_RECEPCION";
+        }
+        
+        // OPERADOR_LUPULO: Maneja flujo de lúpulo (SILO_LUPULO → COCCION)
+        if (from.equals("SILO_LUPULO") && to.equals("COCCION")) {
+            return "OPERADOR_LUPULO";
+        }
+        
+        // OPERADOR_LEVADURA: Maneja flujo de levadura (SILO_LEVADURA → FERMENTACION)
+        if (from.equals("SILO_LEVADURA") && to.equals("FERMENTACION")) {
+            return "OPERADOR_LEVADURA";
+        }
+        
+        // OPERADOR_EMPACADO: Maneja flujo de empacado (EMPACADO → ALMACENAJE)
+        if (from.equals("EMPACADO") && to.equals("ALMACENAJE")) {
+            return "OPERADOR_EMPACADO";
+        }
+        
+        // CAMION: Maneja flujo de ALMACENAJE → MERCADO (ACCUM 6)
+        if (from.equals("ALMACENAJE") && to.equals("MERCADO")) {
+            return "CAMION";
+        }
+        
+        // Por defecto, usar OPERADOR_RECEPCION
+        return "OPERADOR_RECEPCION";
     }
 
-    // Método para manejar inicio de movimiento de grúa
-    private void handleStartCraneMove(Valve valve, String destination) {
-        Location from = valve.getCurrentLocation(); // Obtener ubicación origen
+    // Método para manejar inicio de movimiento de operador
+    private void handleStartCraneMove(Valve entity, String destination) {
+        Location from = entity.getCurrentLocation(); // Obtener ubicación origen
         if (from != null) { // Si hay ubicación origen
-            from.removeValve(valve); // Remover válvula de ubicación
+            from.removeValve(entity); // Remover entidad de ubicación
             updateLocationMetrics(from); // Actualizar métricas
         }
 
         // Finalizar tiempo de espera
-        if (valve.getState() == Valve.State.IN_QUEUE ||  // Si está en cola o
-            valve.getState() == Valve.State.WAITING_CRANE) { // esperando grúa
-            valve.endWaiting(currentTime); // Finalizar tiempo de espera
+        if (entity.getState() == Valve.State.IN_QUEUE ||  // Si está en cola o
+            entity.getState() == Valve.State.WAITING_CRANE) { // esperando transporte
+            entity.endWaiting(currentTime); // Finalizar tiempo de espera
         }
 
-        crane.pickupValve(valve); // Grúa recoge válvula
-        valve.setState(Valve.State.IN_TRANSIT); // Establecer estado en tránsito
-        valve.setCurrentLocation(null); // En tránsito = sin ubicación fija
+        // Determinar operador responsable y registrar pickup
+        String operatorKey = getResponsibleOperator(from != null ? from.getName() : "", destination);
+        Operator operator = operators.get(operatorKey);
+        if (operator != null) {
+            operator.pickupEntity(entity); // Operador recoge entidad
+        }
+        
+        entity.setState(Valve.State.IN_TRANSIT); // Establecer estado en tránsito
+        entity.setCurrentLocation(null); // En tránsito = sin ubicación fija
     }
 
-    // Método para manejar fin de movimiento de grúa
-    private void handleEndCraneMove(Valve valve, String destination) {
+    // Método para manejar fin de movimiento de operador
+    private void handleEndCraneMove(Valve entity, String destination) {
         Location destLoc = locations.get(destination); // Obtener ubicación de destino
 
+        // Determinar operador responsable
+        Location from = entity.getCurrentLocation();
+        String operatorKey = getResponsibleOperator(from != null ? from.getName() : "", destination);
+        Operator operator = operators.get(operatorKey);
+        
         // Sincronizar animación antes de liberar
-        crane.completeTrip(); // Completar viaje de grúa
-
-        if (destination.equals("STOCK")) { // Si destino es STOCK
-            destLoc.addToQueue(valve); // Agregar válvula a cola de STOCK
-            updateLocationMetrics(destLoc); // Actualizar métricas
-            destLoc.removeValve(valve); // Act as sink so it doesn't retain inventory
-            updateLocationMetrics(destLoc); // Actualizar métricas nuevamente
-            valve.setState(Valve.State.COMPLETED); // Establecer estado completado
-            valve.setCurrentLocation(null); // Sin ubicación (completada)
-            completedValves.add(valve); // Agregar a lista de válvulas completadas
-            statistics.recordCompletion(valve, currentTime); // Registrar completitud en estadísticas
-            completedInventoryCount++; // Incrementar contador de inventario completado
-        } else if (destination.startsWith("Almacen")) { // Si destino es almacén
-            // Crane drops valve at storage
-            destLoc.addToQueue(valve); // Agregar válvula a almacén
-            updateLocationMetrics(destLoc); // Actualizar métricas
-            valve.setState(Valve.State.IN_QUEUE); // Establecer estado en cola
-            valve.setCurrentLocation(destLoc); // Establecer ubicación actual
-            applyHoldTime(valve, destLoc.getName(), currentTime); // Aplicar tiempo de retención
-
-            // Immediately try to move to machine (ProModel: Almacen_M1 -> M1 is instant)
-            String machineName = destination.replace("Almacen_", ""); // Extraer nombre de máquina
-            Location machineParent = locations.get(machineName); // Obtener máquina padre
-            if (machineParent != null) { // Si existe
-                checkMachineQueue(machineParent, destLoc); // Verificar cola de máquina
-            }
+        if (operator != null) {
+            operator.completeTrip(); // Completar viaje de operador
+            operator.releaseEntity(); // Liberar entidad de operador
+            operator.setBusy(false); // Establecer operador como no ocupado
         }
 
-        crane.releaseValve(); // Liberar válvula de grúa
-        crane.setBusy(false); // Establecer grúa como no ocupada
+        if (destination.equals("MERCADO")) { // Si destino es MERCADO (EXIT)
+            destLoc.addToQueue(entity); // Agregar entidad a cola de MERCADO
+            updateLocationMetrics(destLoc); // Actualizar métricas
+            destLoc.removeValve(entity); // Remover inmediatamente (actúa como sink)
+            updateLocationMetrics(destLoc); // Actualizar métricas nuevamente
+            entity.setState(Valve.State.COMPLETED); // Establecer estado completado
+            entity.setCurrentLocation(null); // Sin ubicación (completada)
+            completedValves.add(entity); // Agregar a lista de entidades completadas
+            statistics.recordCompletion(entity, currentTime); // Registrar completitud en estadísticas
+            completedInventoryCount++; // Incrementar contador de inventario completado
+        } else { // Cualquier otro destino
+            destLoc.addToQueue(entity); // Agregar entidad al destino
+            updateLocationMetrics(destLoc); // Actualizar métricas
+            entity.setState(Valve.State.IN_QUEUE); // Establecer estado en cola
+            entity.setCurrentLocation(destLoc); // Establecer ubicación actual
+            applyHoldTime(entity, destLoc.getName(), currentTime); // Aplicar tiempo de retención
 
-        // CRÍTICO: Verificar válvulas bloqueadas que ahora pueden moverse
-        checkBlockedValves(); // Verificar válvulas bloqueadas
+            // Procesar siguiente paso según el flujo
+            processEntityAtLocation(entity, destLoc);
+        }
 
-        // CRÍTICO: Intentar siguiente movimiento INMEDIATAMENTE
-        // La grúa debe estar constantemente activa
-        tryScheduleCraneMove(); // Intentar programar movimiento de grúa
-
-        // If crane can't move (shift ended), schedule wakeup
-        if (!crane.isBusy() && !shiftCalendar.isWorkingTime(currentTime)) { // Si grúa no ocupada y fuera de turno
-            if (!pendingCraneTransfers.isEmpty() ||  // Si hay transferencias pendientes o
-                locations.get("DOCK").getQueueSize() > 0) { // hay válvulas en DOCK
-                scheduleCraneWakeup(); // Programar despertar de grúa
-            }
+        // Intentar siguiente movimiento del operador
+        tryScheduleOperatorMove(); // Intentar programar movimiento de operador
+    }
+    
+    // Método para procesar entidad en una ubicación
+    private void processEntityAtLocation(Valve entity, Location location) {
+        String locName = location.getName();
+        
+        // Verificar si hay procesamiento que hacer en esta ubicación
+        Double processTime = Valve.LOCATION_PROCESS_TIMES.get(locName);
+        if (processTime != null && processTime > 0) {
+            entity.setReadyTime(currentTime); // Establecer tiempo de preparación
+            entity.startProcessing(currentTime); // Iniciar procesamiento
+            
+            eventQueue.add(new Event(Event.Type.END_PROCESSING, // Agregar evento de fin de procesamiento
+                currentTime + processTime, entity, null)); // Con tiempo actual + tiempo de procesamiento
+        } else {
+            // Sin procesamiento, programar para siguiente movimiento
+            entity.advanceStep();
+            pendingOperatorTransfers.add(entity);
+            tryScheduleOperatorMove();
         }
     }
 
@@ -810,42 +929,46 @@ public class SimulationEngine {
         updateMachineAggregate("M2", sampleTime); // Actualizar agregado de M2
         updateMachineAggregate("M3", sampleTime); // Actualizar agregado de M3
 
-        // Update crane statistics
-        crane.updateStatistics(sampleTime); // Actualizar estadísticas de grúa
-        Config config = Config.getInstance(); // Obtener configuración
-        int craneUnits = config.getResourceUnits(crane.getName(), crane.getUnits()); // Obtener unidades de grúa
-        double weeksSimulated = Math.max(sampleTime, SAMPLE_EPSILON) / HOURS_PER_WEEK; // Calcular semanas simuladas
-        double defaultScheduled = shiftCalendar.getTotalWorkingHoursPerWeek() * weeksSimulated; // Calcular horas programadas
-        double scheduledHours = config.getResourceScheduledHours(crane.getName(), defaultScheduled); // Obtener horas programadas de configuración
-        int totalTrips = crane.getTotalTrips(); // Obtener total de viajes
+        // Update operator statistics
+        for (Map.Entry<String, Operator> entry : operators.entrySet()) {
+            Operator operator = entry.getValue();
+            operator.updateStatistics(sampleTime); // Actualizar estadísticas de operador
+            
+            Config config = Config.getInstance(); // Obtener configuración
+            int operatorUnits = config.getResourceUnits(operator.getName(), operator.getUnits()); // Obtener unidades
+            double weeksSimulated = Math.max(sampleTime, SAMPLE_EPSILON) / (MINUTES_PER_WEEK / 60.0); // Calcular semanas simuladas
+            double defaultScheduled = shiftCalendar.getTotalWorkingHoursPerWeek() * weeksSimulated; // Calcular horas programadas
+            double scheduledHours = config.getResourceScheduledHours(operator.getName(), defaultScheduled); // Obtener horas programadas
+            int totalTrips = operator.getTotalTrips(); // Obtener total de viajes
 
-        double defaultHandleMinutes = totalTrips > 0 // Calcular minutos de manejo promedio
-            ? (crane.getTotalUsageTime() * 60.0) / totalTrips // Si hay viajes
-            : 0.0; // Si no hay viajes
-        double avgHandleMinutes = config.getResourceAvgHandleMinutes(crane.getName(), defaultHandleMinutes); // Obtener de configuración
-        double defaultTravelMinutes = totalTrips > 0 // Calcular minutos de viaje promedio
-            ? (crane.getTotalTravelTime() * 60.0) / totalTrips // Si hay viajes
-            : 0.0; // Si no hay viajes
-        double avgTravelMinutes = config.getResourceAvgTravelMinutes(crane.getName(), defaultTravelMinutes); // Obtener de configuración
-        double avgParkMinutes = config.getResourceAvgParkMinutes(crane.getName(), 0.0); // Obtener minutos de estacionamiento
-        double blockedPercent = config.getResourceBlockedPercent(crane.getName(), 0.0); // Obtener porcentaje bloqueado
+            double defaultHandleMinutes = totalTrips > 0 // Calcular minutos de manejo promedio
+                ? (operator.getTotalUsageTime() * 60.0) / totalTrips // Si hay viajes
+                : 0.0; // Si no hay viajes
+            double avgHandleMinutes = config.getResourceAvgHandleMinutes(operator.getName(), defaultHandleMinutes); // Obtener de configuración
+            double defaultTravelMinutes = totalTrips > 0 // Calcular minutos de viaje promedio
+                ? (operator.getTotalTravelTime() * 60.0) / totalTrips // Si hay viajes
+                : 0.0; // Si no hay viajes
+            double avgTravelMinutes = config.getResourceAvgTravelMinutes(operator.getName(), defaultTravelMinutes); // Obtener de configuración
+            double avgParkMinutes = config.getResourceAvgParkMinutes(operator.getName(), 0.0); // Obtener minutos de estacionamiento
+            double blockedPercent = config.getResourceBlockedPercent(operator.getName(), 0.0); // Obtener porcentaje bloqueado
 
-        double totalWorkMinutes = totalTrips * (avgHandleMinutes + avgTravelMinutes + avgParkMinutes); // Calcular minutos totales de trabajo
-        double utilization = scheduledHours > 1e-9 // Calcular utilización
-            ? (totalWorkMinutes / 60.0) / scheduledHours * 100.0 // Si hay horas programadas
-            : 0.0; // Si no hay horas programadas
+            double totalWorkMinutes = totalTrips * (avgHandleMinutes + avgTravelMinutes + avgParkMinutes); // Calcular minutos totales de trabajo
+            double utilization = scheduledHours > 1e-9 // Calcular utilización
+                ? (totalWorkMinutes / 60.0) / scheduledHours * 100.0 // Si hay horas programadas
+                : 0.0; // Si no hay horas programadas
 
-        statistics.updateCraneStats( // Actualizar estadísticas de grúa
-            craneUnits, // Unidades
-            scheduledHours, // Horas programadas
-            totalWorkMinutes, // Minutos totales de trabajo
-            totalTrips, // Total de viajes
-            avgHandleMinutes, // Minutos promedio de manejo
-            avgTravelMinutes, // Minutos promedio de viaje
-            avgParkMinutes, // Minutos promedio de estacionamiento
-            blockedPercent, // Porcentaje bloqueado
-            utilization, // Utilización
-            sampleTime); // Tiempo de muestreo
+            statistics.updateCraneStats( // Actualizar estadísticas de operador (reutilizando método crane)
+                operatorUnits, // Unidades
+                scheduledHours, // Horas programadas
+                totalWorkMinutes, // Minutos totales de trabajo
+                totalTrips, // Total de viajes
+                avgHandleMinutes, // Minutos promedio de manejo
+                avgTravelMinutes, // Minutos promedio de viaje
+                avgParkMinutes, // Minutos promedio de estacionamiento
+                blockedPercent, // Porcentaje bloqueado
+                utilization, // Utilización
+                sampleTime); // Tiempo de muestreo
+        }
 
         lastSampleTime = sampleTime; // Actualizar último tiempo de muestreo
     }
@@ -990,20 +1113,9 @@ public class SimulationEngine {
 
         valve.setReadyTime(Math.max(valve.getReadyTime(), currentTime)); // Actualizar tiempo de preparación
 
-        if ("DOCK".equals(locationName)) { // Si es DOCK
-            tryScheduleCraneMove(); // Intentar programar movimiento de grúa
-            return; // Salir del método
-        }
-
-        if (locationName.startsWith("Almacen_")) { // Si es almacén
-            String machineName = locationName.replace("Almacen_", ""); // Extraer nombre de máquina
-            Location machineParent = locations.get(machineName); // Obtener máquina padre
-            if (machineParent != null) { // Si existe
-                checkMachineQueue(machineParent, currentLocation); // Verificar cola de máquina
-            }
-        }
-
-        tryScheduleCraneMove(); // Intentar programar movimiento de grúa
+        // Después de liberación de retención, intentar mover entidad
+        pendingOperatorTransfers.add(valve);
+        tryScheduleOperatorMove(); // Intentar programar movimiento de operador
     }
 
     // Método para obtener tiempo de retención de ubicación
@@ -1019,12 +1131,12 @@ public class SimulationEngine {
         }
 
         String name = (String) data; // Convertir a String
-        if ("CRANE".equals(name)) { // Si es grúa
-            if (!pendingCraneTransfers.isEmpty()) { // Si hay transferencias pendientes
+        if ("OPERATOR".equals(name)) { // Si es operador
+            if (!pendingOperatorTransfers.isEmpty()) { // Si hay transferencias pendientes
                 return true; // Retornar verdadero
             }
 
-            Location dock = locations.get("DOCK"); // Obtener DOCK
+            Location dock = locations.get("MALTEADO"); // Obtener primera ubicación
             if (dock != null) { // Si existe
                 for (Valve valve : dock.getAllValves()) { // Iterar por válvulas en DOCK
                     String destination = getNextDestination(valve); // Obtener destino
@@ -1083,7 +1195,8 @@ public class SimulationEngine {
         currentTime = 0; // Reiniciar tiempo actual
         statistics = new Statistics(); // Crear nuevo objeto de estadísticas
         initializeLocations(); // Inicializar ubicaciones
-        initializeCrane(); // Inicializar grúa
+        initializeOperators(); // Inicializar operadores
+        initializeJoinOperations(); // Inicializar operaciones JOIN
         scheduleArrivals(); // Programar llegadas
         scheduleStatisticsSampling(); // Programar muestreo de estadísticas
         dockToAlmacenMoves = 0; // Reiniciar contador de movimientos
@@ -1098,7 +1211,22 @@ public class SimulationEngine {
     public boolean isRunning() { return isRunning; } // Verificar si está ejecutándose
     public boolean isPaused() { return isPaused; } // Verificar si está pausado
     public Map<String, Location> getLocations() { return locations; } // Obtener mapa de ubicaciones
-    public Crane getCrane() { return crane; } // Obtener grúa
+    public Map<String, Operator> getOperators() { return operators; } // Obtener operadores
+    
+    // Método temporal para compatibilidad con GUI (retorna un objeto Crane adaptado desde Operator)
+    @Deprecated
+    public Crane getCrane() {
+        // Retornar una instancia de Crane para compatibilidad temporal con GUI
+        // TODO: Actualizar GUI para usar operadores múltiples
+        if (operators.isEmpty()) return null;
+        
+        Operator firstOp = operators.values().iterator().next();
+        Point pos = firstOp.getCurrentPosition();
+        if (pos == null) pos = new Point(0, 0);
+        
+        // Crear Crane temporal con datos del primer operador
+        return new Crane("Operador Principal", 1, firstOp.getSpeed(), firstOp.getSpeed(), pos);
+    }
     public Statistics getStatistics() { return statistics; } // Obtener estadísticas
     public int getAnimationSpeed() { return animationSpeed; } // Obtener velocidad de animación
     public void setAnimationSpeed(int speed) { this.animationSpeed = Math.max(1, Math.min(100, speed)); } // Establecer velocidad de animación (limitada 1-100)
